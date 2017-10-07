@@ -24,6 +24,7 @@ struct Command {
 static struct Command commands[] = {
 	{ "help", "Display this list of commands", mon_help },
 	{ "kerninfo", "Display information about the kernel", mon_kerninfo },
+	{ "backtrace", "Display stack backtrace information", mon_backtrace },
 };
 
 /***** Implementations of basic kernel monitor commands *****/
@@ -49,6 +50,7 @@ mon_kerninfo(int argc, char **argv, struct Trapframe *tf)
 	cprintf("  etext  %08x (virt)  %08x (phys)\n", etext, etext - KERNBASE);
 	cprintf("  edata  %08x (virt)  %08x (phys)\n", edata, edata - KERNBASE);
 	cprintf("  end    %08x (virt)  %08x (phys)\n", end, end - KERNBASE);
+
 	cprintf("Kernel executable memory footprint: %dKB\n",
 		ROUNDUP(end - entry, 1024) / 1024);
 	return 0;
@@ -58,6 +60,31 @@ int
 mon_backtrace(int argc, char **argv, struct Trapframe *tf)
 {
 	// Your code here.
+
+	uintptr_t *stack_smernik = (uintptr_t*) read_ebp(); // nacitam zaciatok aktualneho stack-frame-u
+	
+	struct Eipdebuginfo info_volania;	
+
+	cprintf("Stack backtrace:\n");
+
+	do {
+	
+	// vypisem informacie
+	cprintf("  ebp %08x  eip %08x  args %08x %08x %08x %08x %08x\n", stack_smernik, *(stack_smernik+1), *(stack_smernik+2), *(stack_smernik+3), *(stack_smernik+4), *(stack_smernik+5), *(stack_smernik+6) );
+
+	// pokusim sa zistit info
+	if( ! (debuginfo_eip( *(stack_smernik+1), &info_volania ) < 0) ) {
+		// pokial sa vyskytla chyba pri zistovani info nic nevypisem (funkcia vrati -1)
+	
+		cprintf("       %s:%d: %.*s+%d\n", info_volania.eip_file, info_volania.eip_line, info_volania.eip_fn_namelen, info_volania.eip_fn_name, *(stack_smernik+1) - info_volania.eip_fn_addr);
+
+	}
+
+	// posuniem ebp na dalsi stack-frame
+	stack_smernik = (uintptr_t*) *stack_smernik;
+
+	} while(stack_smernik != NULL);
+
 	return 0;
 }
 
