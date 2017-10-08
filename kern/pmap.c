@@ -103,9 +103,28 @@ boot_alloc(uint32_t n)
 	//
 	// LAB 2: Your code here.
 
-	// hello wrolld!
+	// n = 0 ==> return nextfree;
+	if(n == 0) {
+		return  nextfree;
+	}
 
-	return NULL;
+	// n > 0 ==> zistit, ci mam dost volnej pamate na n bytov
+	// npages * PGSIZE = cela pamat
+	// fyz adresa 'nextfree' = koniec zaplnenej casti
+	// jednotky udajov su v bytoch (najmensia vec, ktoru vie OS adresovat)
+	uint32_t volnychBytov = npages * PGSIZE - PADDR(nextfree);
+
+	if(n <= volnychBytov) {
+		result = nextfree;
+		// posunut nextfree na dalsi nasobok velkosti stranky
+		nextfree = ROUNDUP(nextfree + n, PGSIZE);
+	}
+	else {
+		// nemam dost miesta ==> panic
+		panic("boot_alloc() - nedostatok volnej pamate na alokovanie %d bytov\n", n);
+	}
+
+	return result;
 }
 
 // Set up a two-level page table:
@@ -127,7 +146,7 @@ mem_init(void)
 	i386_detect_memory();
 
 	// Remove this line when you're ready to test this function.
-	panic("mem_init: This function is not finished\n");
+	// panic("mem_init: This function is not finished\n");
 
 	//////////////////////////////////////////////////////////////////////
 	// create initial page directory.
@@ -151,6 +170,9 @@ mem_init(void)
 	// to initialize all fields of each struct PageInfo to 0.
 	// Your code goes here:
 
+	// na ulozenie mojej array 'pages' potrebujem npages * sizeof(PageInfo) miesta
+	pages = boot_alloc(npages*sizeof(struct PageInfo)); // alokujem pamat
+	memset(pages, 0, npages*sizeof(struct PageInfo)); // naplnim nulami
 
 	//////////////////////////////////////////////////////////////////////
 	// Now that we've allocated the initial kernel data structures, we set
@@ -160,7 +182,7 @@ mem_init(void)
 	// or page_insert
 	page_init();
 
-	check_page_free_list(1);
+	check_page_free_list(1); // na 3. cvicenie mame implementovat len potialto
 	check_page_alloc();
 	check_page();
 
