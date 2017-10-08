@@ -281,6 +281,45 @@ page_init(void)
 		pages[i].pp_link = page_free_list;
 		page_free_list = &pages[i];
 	}
+
+	// kod hore nastavil vsetky stranky ako volne a pridal ich do zretazeneho zoznamu volnych stranok - stranka s najnizsou adresou (prva) je na poslednom mieste v zozname
+
+	// moja uloha je prejst zoznamom a nasledujuce stranky oznacit ako pouzivane (nastavit pocet referencii na cislo > 0 a vyhodit ich zo zoznamu)
+	// stranky ktore musim vyhodit:
+	// 1) stranka s indexom 0 ==> stranka na poslednom mieste zretazeneho zoznamu
+	// 2) volne stranky ==> nezaujima ma
+	// 3) stranky medzi [IOPHYSMEM, EXPHYSMEM) treba vyhodit ==> vypocitam si ich indexy tym, ze ich adresu podelim velkostou stranky
+	// 4) od EXPHYSMEM (1MB) je kernel a za nim je volno ==> koniec kernelu by som mal vediet zistit volanim boot_alloc(0)
+
+	// najlahzsie prejdem zoznamom pomocou pointra na pointer
+	// (*smernik) (prvok s ktorym chcem pracovat)->pp_link (prvok na dalsom mieste v zozname)
+
+	struct PageInfo **smernik = &page_free_list; // takymto postupom mozem zmenit aj prvy prvok bez extra osetrovania
+
+	while( *smernik != NULL /* kym aktualny prvok nie je koniec zoznamu */) {
+		// bod 3) a 4)  [IOPHYSMEM, EXPHYSMEM) + [EXPHYSMEM, fyz adres od boot_alloc(0) )
+		if( page2pa( (*smernik) ) >= IOPHYSMEM && page2pa( (*smernik) ) < PADDR( boot_alloc(0) ) ) {
+			// stranka s ktorou pracujem je v diere pre I/O zariadenia ==> treba ju vyradit zo zoznamu prazdnych stranok
+			(*smernik)->pp_ref = 1;
+			struct PageInfo *pomocny = (*smernik)->pp_link;
+			(*smernik)->pp_link = NULL;
+			(*smernik) = pomocny;
+			// POZOR DUPLICITNY KOD!!!! AK TU MAS CHYBU OPRAV JU AJ DOLE
+		}
+		// bod 1) stranka na fyz adrese 0 (spojit to do jednej podmienky by to urobilo dost neprehladne, hcoi takto mam duplicitny kod)
+		else if( page2pa( (*smernik) ) == 0 ) {
+			(*smernik)->pp_ref = 1;
+			struct PageInfo *pomocny = (*smernik)->pp_link;
+			(*smernik)->pp_link = NULL;
+			(*smernik) = pomocny;
+			// POZOR DUPLICITNY KOD!!!! AK TU MAS CHYBU OPRAV JU AJ HORE
+		}
+		// najdolezitejsia vec! Nezabudnut sa posunut v zozname dalej pokial som nic nezmazal
+		else {
+			smernik = &( (*smernik)->pp_link ); // chcem adresu premennej v ktorej je pointer ukazujuci na dalsi prvok (to by malo byt toto...)
+		}
+	}
+
 }
 
 //
@@ -299,7 +338,23 @@ struct PageInfo *
 page_alloc(int alloc_flags)
 {
 	// Fill this function in
-	return 0;
+
+	if(page_free_list == NULL) {
+		// nie je ziadna stranka volna => vrat NULL
+		return NULL;
+	}
+
+	// vyberieme stranku zo zoznamu volnych stranok
+	struct PageInfo *alokovanaStranka = page_free_list;
+	page_free_list = page_free_list->pp_link;
+	alokovanaStranka->pp_link = NULL;
+
+	// vyplnim stranku 0 ak treba
+	if(alloc_flags & ALLOC_ZERO) {
+		memset(page2kva(alokovanaStranka), 0, PGSIZE);
+	}
+
+	return alokovanaStranka;
 }
 
 //
@@ -312,6 +367,14 @@ page_free(struct PageInfo *pp)
 	// Fill this function in
 	// Hint: You may want to panic if pp->pp_ref is nonzero or
 	// pp->pp_link is not NULL.
+
+	if(pp->pp_ref != 0 || pp->pp_link != NULL) {
+		panic("page_free() - pp_ref is nonzero or pp_link is not NULL\n");
+	}
+
+	// pridat stranku do zoznamu volnych
+	pp->pp_link = page_free_list;
+	page_free_list = pp;	
 }
 
 //
