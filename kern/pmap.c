@@ -112,7 +112,7 @@ boot_alloc(uint32_t n)
 	// npages * PGSIZE = cela pamat
 	// fyz adresa 'nextfree' = koniec zaplnenej casti
 	// jednotky udajov su v bytoch (najmensia vec, ktoru vie OS adresovat)
-	uint32_t volnychBytov = npages * PGSIZE - PADDR(nextfree);
+	uint32_t volnychBytov = 4*1024*1024 - PADDR(nextfree); // mam namapovanych (k dispozicii) len 4MB a nie celu RAM!
 
 	if(n <= volnychBytov) {
 		result = nextfree;
@@ -414,7 +414,40 @@ pte_t *
 pgdir_walk(pde_t *pgdir, const void *va, int create)
 {
 	// Fill this function in
-	return NULL;
+
+	// podla prednasky
+	uintptr_t *pde = &(pgdir[PDX(va)]); // adresa riadka v page directory na ktorom sa nachadza adresa page table (+ prava), kde by mala byt nasa stranka
+	// pde = page directory entry
+	
+	// je v PD zaznam o PT? --> ak nie a mam ho vytvorit tak to urboim, ak nemam tak vratim NULL
+	if( !(*pde & PTE_P) ) {
+		// stranka nie je pritomna, mam ju vytvorit?
+		if(create == false) {
+			return NULL;
+		}
+
+		// vytvorim novu stranku
+		struct PageInfo *novy_pde = page_alloc(ALLOC_ZERO);
+		
+		novy_pde->pp_ref++;
+		novy_pde->pp_link = NULL;
+
+		// podarilo sa?
+		if(novy_pde == NULL) {
+			// chyba pri alokacii vrat NULL
+			return NULL;
+		}
+
+		// uloz zaznam do tabulky
+		*pde = page2pa(novy_pde) | PTE_P | PTE_W | PTE_U; // ulozim zaznam do PT + prava
+	}
+
+	// zaznam je v tabulke -> ziskajme si pointer na PT
+
+	uintptr_t *pgtab = KADDR(PTE_ADDR(*pde)); // virtualna adresa z fyzickej adresy ulozenej v pde
+	
+	// vratim pointer na riadok PT, ktory vyzadujeme
+	return &(pgtab[PTX(va)]);
 }
 
 //
@@ -481,7 +514,21 @@ struct PageInfo *
 page_lookup(pde_t *pgdir, void *va, pte_t **pte_store)
 {
 	// Fill this function in
-	return NULL;
+
+	// ziskajme 'pte' odpovedajuce 'va'
+	pte_t *pte = pgdir_walk(pgdir, va, false);
+
+	if(pte == NULL) {
+		// stranka nie je namapovana ==> vrat NULL
+		return NULL;
+	}
+
+	// pokial je pte_store != 0 mam tam ulozit pte
+	if(pte_store != 0) {
+		*pte_store = pte;
+	}	
+
+	return pa2page(*pte);
 }
 
 //
