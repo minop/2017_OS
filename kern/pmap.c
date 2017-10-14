@@ -146,7 +146,7 @@ mem_init(void)
 	i386_detect_memory();
 
 	// Remove this line when you're ready to test this function.
-	// panic("mem_init: This function is not finished\n");
+	//panic("mem_init: This function is not finished\n");
 
 	//////////////////////////////////////////////////////////////////////
 	// create initial page directory.
@@ -182,7 +182,7 @@ mem_init(void)
 	// or page_insert
 	page_init();
 
-	check_page_free_list(1); // na 3. cvicenie mame implementovat len potialto
+	check_page_free_list(1);
 	check_page_alloc();
 	check_page();
 
@@ -197,6 +197,10 @@ mem_init(void)
 	//    - pages itself -- kernel RW, user NONE
 	// Your code goes here:
 
+	// 'pages' su page aligned (lebo boot_alloc ich tak alokuje)
+	boot_map_region(kern_pgdir, (uintptr_t) pages, ROUNDUP(npages, PGSIZE), UPAGES, PTE_U | PTE_P);
+	// preco ROUNDUP? parameter 'size' v boot_map_region ma byt multiple of page size a ja si nie som isty, ci je to tak na 100% kazdopadne by sa tim nemalo nic pokazit, kedze ta pamat JE alokovana
+
 	//////////////////////////////////////////////////////////////////////
 	// Use the physical memory that 'bootstack' refers to as the kernel
 	// stack.  The kernel stack grows down from virtual address KSTACKTOP.
@@ -209,6 +213,10 @@ mem_init(void)
 	//     Permissions: kernel RW, user NONE
 	// Your code goes here:
 
+	// myslim, ze mam konat obdobne ako hore tu VIEM, ze 'size' je nasobkom PGSIZE lebo je to konstanta tak definovana v subore 'inc/memlayout.h'
+	boot_map_region(kern_pgdir, *bootstack, KSTKSIZE, KSTACKTOP-KSTKSIZE, PTE_W | PTE_P);
+	// pamat podtym NESMIEM namapovat aby sa to pokazilo ked sem pretecie zasobnik
+
 	//////////////////////////////////////////////////////////////////////
 	// Map all of physical memory at KERNBASE.
 	// Ie.  the VA range [KERNBASE, 2^32) should map to
@@ -217,6 +225,16 @@ mem_init(void)
 	// we just set up the mapping anyway.
 	// Permissions: kernel RW, user NONE
 	// Your code goes here:
+
+	// do tretice
+	boot_map_region(kern_pgdir, KERNBASE, 0x10000000, 0, PTE_W | PTE_P);
+	// size by snad malo byt dobre.... 0x100000000 - 0xf0000000 = 0x10000000
+	//	0x100000000 (2^32)
+	//    - 0x f0000000 (KERNBASE)
+	//	___________
+	//	0x 10000000 (ak som to spravne previedol tak je to 256M )
+	
+	
 
 	// Check that the initial page directory has been set up correctly.
 	check_kern_pgdir();
@@ -429,14 +447,13 @@ pgdir_walk(pde_t *pgdir, const void *va, int create)
 		// vytvorim novu stranku
 		struct PageInfo *novy_pde = page_alloc(ALLOC_ZERO);
 		
-		novy_pde->pp_ref++;
-		novy_pde->pp_link = NULL;
-
-		// podarilo sa?
 		if(novy_pde == NULL) {
 			// chyba pri alokacii vrat NULL
 			return NULL;
-		}
+		}	
+	
+		novy_pde->pp_ref++;
+		novy_pde->pp_link = NULL;
 
 		// uloz zaznam do tabulky
 		*pde = page2pa(novy_pde) | PTE_P | PTE_W | PTE_U; // ulozim zaznam do PT + prava
@@ -465,6 +482,18 @@ static void
 boot_map_region(pde_t *pgdir, uintptr_t va, size_t size, physaddr_t pa, int perm)
 {
 	// Fill this function in
+
+	// pp_ref nemam inkrementovat, mam ale riesit pp_link? (nebudem)
+
+	uintptr_t i;
+	for(i = 0; va+i < va+size; i++) {
+		pte_t *pte = pgdir_walk(pgdir, ((void*) va) + i, true); // namapovat znamena, ze to mam vybavit takze musim vytvorit pripadne potrebne page tables
+		*pte = (pa+i) | perm | PTE_P;
+
+		// vobec neriesim, ci nahodou neprepisujem ine mapovanie, hint ale nenaznacuje, ze mam uvolnovat nejake stranky predpokladam teda, ze to netreba robit (z nazvu funkcie sa da usudzovat, ze sa pouziva iba pri starte a teda tam aj tak nic namapovane nebude)
+	}
+
+	return;
 }
 
 //
@@ -496,6 +525,30 @@ int
 page_insert(pde_t *pgdir, struct PageInfo *pp, void *va, int perm)
 {
 	// Fill this function in
+
+	// ziskaj *pte pre nasu 'va'; pokial neexistuje page table chceme ju vytvorit
+	pte_t *pte = pgdir_walk(pgdir, va, true);
+	
+	if(pte == NULL) {
+		// nebolo mozne vytvorit page table
+		return -E_NO_MEM;
+	}
+	
+	// pred tym ako budem riesit pridavanie stranky zvysim pp_ref o 1, v corner-case pripade (ked zavolam page_remove()) nebude tato stranka uvolnena (mala by mat pp_ref aspon 2)
+	pp->pp_ref++;
+
+	// mam *pte chcem pozriet, ci tam je uz namapovana nejaka stranka, aby som ju mohol odstranit ()	
+	
+	if(*pte & PTE_P) {
+		// v pte sa uz nachadza nejaka stranka --> uvolnim ju
+		page_remove(pgdir, va);
+
+		// v pte bola pritomna stranka treba invalidovat TLB (robi funkcia page_remove)
+	}
+
+	// pte je prazdne mozem tam zapisat fyzicku adresu stranky + prava
+	*pte = page2pa(pp) | perm | PTE_P;
+
 	return 0;
 }
 
@@ -550,6 +603,35 @@ void
 page_remove(pde_t *pgdir, void *va)
 {
 	// Fill this function in
+
+	// je na 'va' namapovana nejaka stranka?
+	pte_t *pte = pgdir_walk(pgdir, va, false);
+
+	// mam odkaz na zaznam?
+	if(pte == NULL) {
+		return;
+	}
+
+	// je na 'va' namapovana stranka?
+	if(*pte & PTE_P) {
+		// ref count stranky treba znizit a ak je 0 tak ju treba uvolnit --> vsetko toto robi funkcia page_decref --> potrebujem PageInfo stranky
+		
+		struct PageInfo *pi_stranky = pa2page(*pte);
+
+		page_decref(pi_stranky);
+		
+		// nastavit obsah pte na 0
+		*pte = 0;
+
+		// posledny bod ma byt invalidovane TLB (po kratkom googleni, by to mal byt nejaky buffer, v ktory sa pouziva pri preklade aby sa usetril cas. Tym, ze sme odmapovali stranku treba povedat, ze ten buffer je zneplatneny)
+		tlb_invalidate(pgdir, va);
+
+		return;
+	}
+	else {
+		// stranka nie je napamovana ==> silently does nothing
+		return;
+	}
 }
 
 //
@@ -806,13 +888,13 @@ check_page(void)
 
 	// should be no free memory
 	assert(!page_alloc(0));
-
+	
 	// there is no page allocated at address 0
 	assert(page_lookup(kern_pgdir, (void *) 0x0, &ptep) == NULL);
-
+	
 	// there is no free memory, so we can't allocate a page table
 	assert(page_insert(kern_pgdir, pp1, 0x0, PTE_W) < 0);
-
+	
 	// free pp0 and try again: pp0 should be used for page table
 	page_free(pp0);
 	assert(page_insert(kern_pgdir, pp1, 0x0, PTE_W) == 0);
@@ -820,7 +902,7 @@ check_page(void)
 	assert(check_va2pa(kern_pgdir, 0x0) == page2pa(pp1));
 	assert(pp1->pp_ref == 1);
 	assert(pp0->pp_ref == 1);
-
+	
 	// should be able to map pp2 at PGSIZE because pp0 is already allocated for page table
 	assert(page_insert(kern_pgdir, pp2, (void*) PGSIZE, PTE_W) == 0);
 	assert(check_va2pa(kern_pgdir, PGSIZE) == page2pa(pp2));
