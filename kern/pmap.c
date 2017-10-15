@@ -198,8 +198,10 @@ mem_init(void)
 	// Your code goes here:
 
 	// 'pages' su page aligned (lebo boot_alloc ich tak alokuje)
-	boot_map_region(kern_pgdir, (uintptr_t) pages, ROUNDUP(npages, PGSIZE), UPAGES, PTE_U | PTE_P);
+	boot_map_region(kern_pgdir, UPAGES, ROUNDUP(npages*sizeof(struct PageInfo), PGSIZE)/PGSIZE, PADDR(pages), PTE_U | PTE_P);
 	// preco ROUNDUP? parameter 'size' v boot_map_region ma byt multiple of page size a ja si nie som isty, ci je to tak na 100% kazdopadne by sa tim nemalo nic pokazit, kedze ta pamat JE alokovana
+
+	// TIL: nepopliest si, ktore adresy sa maju mapovat kam, to CO chcem namapovat je fyzicka adressa a to KAM to chcem namapovat je virtualna (stravil som dost casu tym, ze som zistovola preco to nejde ked som tam dal tie argumenty naopak T_T)
 
 	//////////////////////////////////////////////////////////////////////
 	// Use the physical memory that 'bootstack' refers to as the kernel
@@ -214,8 +216,10 @@ mem_init(void)
 	// Your code goes here:
 
 	// myslim, ze mam konat obdobne ako hore tu VIEM, ze 'size' je nasobkom PGSIZE lebo je to konstanta tak definovana v subore 'inc/memlayout.h'
-	boot_map_region(kern_pgdir, *bootstack, KSTKSIZE, KSTACKTOP-KSTKSIZE, PTE_W | PTE_P);
+	boot_map_region(kern_pgdir, (KSTACKTOP-KSTKSIZE), KSTKSIZE, PADDR(bootstack), PTE_W | PTE_P);
 	// pamat podtym NESMIEM namapovat aby sa to pokazilo ked sem pretecie zasobnik
+
+	// KSTKSIZE uz je v jednotkach PGSIZE takze to nesmiem prevadzat
 
 	//////////////////////////////////////////////////////////////////////
 	// Map all of physical memory at KERNBASE.
@@ -226,14 +230,9 @@ mem_init(void)
 	// Permissions: kernel RW, user NONE
 	// Your code goes here:
 
-	// do tretice
-	boot_map_region(kern_pgdir, KERNBASE, 0x10000000, 0, PTE_W | PTE_P);
-	// size by snad malo byt dobre.... 0x100000000 - 0xf0000000 = 0x10000000
-	//	0x100000000 (2^32)
-	//    - 0x f0000000 (KERNBASE)
-	//	___________
-	//	0x 10000000 (ak som to spravne previedol tak je to 256M )
-	
+	// do tretice npages*PGSIZE
+	boot_map_region(kern_pgdir, KERNBASE, (0x10000000)/PGSIZE, 0, PTE_W | PTE_P);
+	// to cislo je 2^32 - KERNBASE jednotky v ktorych sadavam velkost su PGSIZE pretoze neviem citat a dve hodiny som zistoval co kde nefunguje. Kebyze to bolo zadavane v Bytoch tak mi prave toto volanie pretecie pri podmienke (2^32 je viac ako uchova 32b integer a teda sa nic nenamapuje => kontrola neprebehne uspesne)
 	
 
 	// Check that the initial page directory has been set up correctly.
@@ -484,11 +483,11 @@ boot_map_region(pde_t *pgdir, uintptr_t va, size_t size, physaddr_t pa, int perm
 	// Fill this function in
 
 	// pp_ref nemam inkrementovat, mam ale riesit pp_link? (nebudem)
-
-	uintptr_t i;
-	for(i = 0; va+i < va+size; i++) {
-		pte_t *pte = pgdir_walk(pgdir, ((void*) va) + i, true); // namapovat znamena, ze to mam vybavit takze musim vytvorit pripadne potrebne page tables
-		*pte = (pa+i) | perm | PTE_P;
+		
+	size_t i; // je v jednotkach PGSIZE pretoze inac mi ten posledny boot_map_region nezbehne lebo mi pretecie integer T_T (kolko som zabil casu, kym som na to prisiel....)
+	for(i = 0; va+i < va+size; i = i + 1) {
+		pte_t *pte = pgdir_walk(pgdir, (void*) (va + i*PGSIZE), true); // namapovat znamena, ze to mam vybavit takze musim vytvorit pripadne potrebne page tables
+		*pte = (pa+i*PGSIZE) | perm | PTE_P;
 
 		// vobec neriesim, ci nahodou neprepisujem ine mapovanie, hint ale nenaznacuje, ze mam uvolnovat nejake stranky predpokladam teda, ze to netreba robit (z nazvu funkcie sa da usudzovat, ze sa pouziva iba pri starte a teda tam aj tak nic namapovane nebude)
 	}
