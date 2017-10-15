@@ -183,7 +183,7 @@ debuginfo_eip(uintptr_t addr, struct Eipdebuginfo *info)
 	
 	stab_binsearch(stabs, &lline, &rline, N_SLINE, addr);
 	if(lline <= rline) {
-		info->eip_line = stabs[lline].n_value; // z struktury STAB typu cislo riadku precitam hodnotu
+		info->eip_line = stabs[lline].n_desc; // z struktury STAB typu cislo riadku precitam hodnotu
 	} else return -1;
 
 
