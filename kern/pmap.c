@@ -179,6 +179,8 @@ mem_init(void)
 	// Make 'envs' point to an array of size 'NENV' of 'struct Env'.
 	// LAB 3: Your code here.
 
+	envs = boot_alloc(NENV * sizeof(struct Env));
+
 	//////////////////////////////////////////////////////////////////////
 	// Now that we've allocated the initial kernel data structures, we set
 	// up the list of free physical pages. Once we've done so, all further
@@ -216,6 +218,8 @@ mem_init(void)
 	//    - envs itself -- kernel RW, user NONE
 	// LAB 3: Your code here.
 
+	boot_map_region(kern_pgdir, UENVS, ROUNDUP(NENV*sizeof(struct Env), PGSIZE)/PGSIZE, PADDR(envs), PTE_U | PTE_P);
+
 	//////////////////////////////////////////////////////////////////////
 	// Use the physical memory that 'bootstack' refers to as the kernel
 	// stack.  The kernel stack grows down from virtual address KSTACKTOP.
@@ -244,8 +248,8 @@ mem_init(void)
 	// Your code goes here:
 
 	// do tretice npages*PGSIZE
-	boot_map_region(kern_pgdir, KERNBASE, (0x10000000)/PGSIZE, 0, PTE_W | PTE_P);
-	// to cislo je 2^32 - KERNBASE jednotky v ktorych sadavam velkost su PGSIZE pretoze neviem citat a dve hodiny som zistoval co kde nefunguje. Kebyze to bolo zadavane v Bytoch tak mi prave toto volanie pretecie pri podmienke (2^32 je viac ako uchova 32b integer a teda sa nic nenamapuje => kontrola neprebehne uspesne)
+	boot_map_region(kern_pgdir, KERNBASE, ( -KERNBASE )/PGSIZE, 0, PTE_W | PTE_P);
+	// to cislo je 2^32 je 33b cislo a teda sa ulozi ako 0 a 0 - KERNBASE = -KERNBASE
 	
 
 	// Check that the initial page directory has been set up correctly.
@@ -479,7 +483,7 @@ pgdir_walk(pde_t *pgdir, const void *va, int create)
 	return &(pgtab[PTX(va)]);
 }
 
-//
+ize is a multiple of PGSIZE,
 // Map [va, va+size) of virtual address space to physical [pa, pa+size)
 // in the page table rooted at pgdir.  Size is a multiple of PGSIZE, and
 // va and pa are both page-aligned.

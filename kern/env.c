@@ -117,6 +117,16 @@ env_init(void)
 	// Set up envs array
 	// LAB 3: Your code here.
 
+	int i; // 'envs' je NENVS a chcem ich indexovat odzadu pola (-1)
+
+	for(i = NENV - 1; i >= 0; i--) {
+		envs[i].env_id = 0; // nastavim na 0 podla zadania
+		
+		// pridat na zaciatok zretazeneho zoznamu
+		envs[i].env_link = env_free_list;
+		env_free_list = envs+i; // &envs[i]
+	}	
+
 	// Per-CPU part of the initialization
 	env_init_percpu();
 }
@@ -179,6 +189,19 @@ env_setup_vm(struct Env *e)
 	//    - The functions in kern/pmap.h are handy.
 
 	// LAB 3: Your code here.
+
+	// ikremenetvoanie poctu referencii na 'p' (env_pgdir)
+	p->pp_ref++;
+
+	memcpy( page2kva(p)+PDX(UTOP), kern_pgdir+PDX(UTOP), PGSIZE-PDX(UTOP));
+	// dest: adresa kde zacina UTOP v stranke 'p'
+	// src: adresa kde zacina UTOP v stranke 'kern_pgdir'
+	// velkost: velkost stranky - pocet bytov, ktore som preskocil indexom (miesto od indexu do konca)
+
+
+
+	// nastavenie e->pgdir na 'p'
+	e->env_pgdir = page2kva(p); // 'p' je pointer takze je virtualna adresa a ta tam ma byt ulozena
 
 	// UVPT maps the env's own page table read-only.
 	// Permissions: kernel R, user R
