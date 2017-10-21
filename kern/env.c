@@ -198,13 +198,6 @@ env_setup_vm(struct Env *e)
 	// src: adresa kde zacina UTOP v stranke 'kern_pgdir'
 	// velkost: velkost stranky - pocet bytov, ktore som preskocil indexom (miesto od indexu do konca)
 
-	//DEBUG
-/*
-	for(i = 0; i < 1024; i++) {
-		cprintf("%x %08x | %x %08x\n", (uint32_t*)kern_pgdir+i, *((uint32_t*)kern_pgdir+i), (uint32_t*)page2kva(p) +i, *((uint32_t*)page2kva(p) +i));
-	}
-*/
-
 	// nastavenie e->pgdir na 'p'
 	e->env_pgdir = page2kva(p); // 'p' je pointer takze je virtualna adresa a ta tam ma byt ulozena
 
