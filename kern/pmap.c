@@ -483,7 +483,6 @@ pgdir_walk(pde_t *pgdir, const void *va, int create)
 	return &(pgtab[PTX(va)]);
 }
 
-ize is a multiple of PGSIZE,
 // Map [va, va+size) of virtual address space to physical [pa, pa+size)
 // in the page table rooted at pgdir.  Size is a multiple of PGSIZE, and
 // va and pa are both page-aligned.
