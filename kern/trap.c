@@ -166,14 +166,15 @@ trap_dispatch(struct Trapframe *tf)
 	int32_t navratovaH;	
 
 	// podla cisla vynimky presmerujem jej spracovanie (inc/trap.h)
+	// ked sa spracuje volanie myslim si, ze by som mal ukoncit funkciu, za switchom je totiz osetrenie nespracovaneho volania kam sa program aj po spravnom spracovani vzdy dostane... (ak je to zle tak sa to snad prejavi v buducnosti)
 	switch(tf->tf_trapno) {
 		case T_PGFLT: // page fault
 			page_fault_handler(tf);
-			break;
+			return;
 
 		case T_BRKPT: // breakpoint
 			monitor(tf); // spustim monitor
-			break;
+			return;
 
 		case T_SYSCALL: // systemove volanie
 			navratovaH = syscall(	tf->tf_regs.reg_eax, /* v registri eax je cislo sys volania */\
@@ -184,7 +185,7 @@ trap_dispatch(struct Trapframe *tf)
 						tf->tf_regs.reg_esi);
 			// nahrat navratovu hodnotu do registra eax
 			tf->tf_regs.reg_eax = navratovaH;		
-			break;
+			return;
 	}
 
 	// Unexpected trap: The user process or the kernel has a bug.
@@ -247,6 +248,11 @@ page_fault_handler(struct Trapframe *tf)
 	// Handle kernel-mode page faults.
 
 	// LAB 3: Your code here.
+	
+	if((tf->tf_cs & 0x3) == 0) {
+		// spodne dva bity 'code segment' registra su nulove => nachadzam sa v jadre
+		panic("Page fault in kernel\n");
+	}
 
 	// We've already handled kernel-mode exceptions, so if we get here,
 	// the page fault happened in user mode.

@@ -685,7 +685,43 @@ int
 user_mem_check(struct Env *env, const void *va, size_t len, int perm)
 {
 	// LAB 3: Your code here.
+	
+	// vypocitam si zaciatocnu va zarovnanu na stranky a pocet stranok, ktore musim overit (podla kern/env.c region_alloc)
+	void *zacVa = (void*)ROUNDDOWN(va, PGSIZE);
+	int pocetStranok = (ROUNDUP(va+len, PGSIZE) - zacVa )/PGSIZE;
+	int i;
 
+	for(i = 0; i < pocetStranok; i++) {
+		// (1)
+		if( !(zacVa+i*PGSIZE < (void*)ULIM)) {
+			// adresa nie je pod ULIM
+			if(zacVa+i*PGSIZE < va) {
+				user_mem_check_addr = (uintptr_t)(va);
+			}
+			else {
+				user_mem_check_addr = (uintptr_t)(zacVa+i*PGSIZE); // nastavim prvu neplatnu adresu
+			}
+			return -E_FAULT; // vratim chybu
+		}
+
+		// (2)
+		pte_t *stranka = pgdir_walk(env->env_pgdir, zacVa+i*PGSIZE, false);
+		// existuje vobec stranka?
+		if(stranka == NULL) {
+			if(zacVa+i*PGSIZE < va) user_mem_check_addr = (uintptr_t)va; 
+			else user_mem_check_addr = (uintptr_t)(zacVa+i*PGSIZE);
+			return -E_FAULT;
+		}
+		// overim prava + ci je vobec pritomna
+		if( (*stranka & (perm | PTE_P)) != (perm | PTE_P) ) {
+			// nejake prava chybaju
+			if (zacVa+i*PGSIZE < va) user_mem_check_addr = (uintptr_t)va;
+			else user_mem_check_addr = (uintptr_t)(zacVa+i*PGSIZE);
+			return -E_FAULT;
+		}
+	}
+
+	// ak sa nenasla ziadna chyba uspesne skoncim
 	return 0;
 }
 

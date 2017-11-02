@@ -21,6 +21,9 @@ sys_cputs(const char *s, size_t len)
 	// Destroy the environment if not.
 
 	// LAB 3: Your code here.
+	
+	// kontrola argumentov (ma pouzivatel pravo ku nim pristupit?)
+	user_mem_assert(curenv, (void*)s, len, PTE_U); // funkcia je MIT a stara sa o zabitie prostredia, vyuziva vsak tu mnou pisanu, myslim si, ze uzivatel ma vediet vypysat aj pamat do ktorej nevie zapisovat, no ma ku nej pristup (z nejakeho dovodu)
 
 	// Print the string supplied by the user.
 	cprintf("%.*s", len, s);
