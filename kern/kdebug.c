@@ -142,7 +142,7 @@ debuginfo_eip(uintptr_t addr, struct Eipdebuginfo *info)
 		// Make sure this memory is valid.
 		// Return -1 if it is not.  Hint: Call user_mem_check.
 		// LAB 3: Your code here.
-		if(user_mem_check(curenv, ) < 0) return -1;
+		if(user_mem_check(curenv, usd, sizeof(struct UserStabData), PTE_U) < 0) return -1;
 
 		stabs = usd->stabs;
 		stab_end = usd->stab_end;
@@ -151,6 +151,10 @@ debuginfo_eip(uintptr_t addr, struct Eipdebuginfo *info)
 
 		// Make sure the STABS and string table memory is valid.
 		// LAB 3: Your code here.
+	
+		// v dalsom kode ZA tymto 'elsom' sa kontroluje, ci dlzka nahodou nie je zaporna.... Moj kod sa snazi byt inteligentny a potom si to len sam komplikujem. Existuju situacie kedy skontrolujem jednu stranku pri zapornej dlzke pamati (ak je ok tak program skonci na kontrole za elsom a ak nie je ok tak skoncim hned tu). Myslim ze to nebude vadit
+		if(user_mem_check(curenv, stabs, stab_end-stabs, PTE_U) < 0) return -1;
+		if(user_mem_check(curenv, stabstr, stabstr_end-stabstr, PTE_U) < 0) return -1;
 	}
 
 	// String table validity checks

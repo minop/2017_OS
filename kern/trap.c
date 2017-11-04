@@ -251,7 +251,7 @@ page_fault_handler(struct Trapframe *tf)
 	
 	if((tf->tf_cs & 0x3) == 0) {
 		// spodne dva bity 'code segment' registra su nulove => nachadzam sa v jadre
-		panic("Page fault in kernel\n");
+		panic("Page fault in kernel accesing va %08x\n", fault_va);
 	}
 
 	// We've already handled kernel-mode exceptions, so if we get here,

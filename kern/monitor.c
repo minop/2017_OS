@@ -74,7 +74,7 @@ mon_backtrace(int argc, char **argv, struct Trapframe *tf)
 	cprintf("  ebp %08x  eip %08x  args %08x %08x %08x %08x %08x\n", stack_smernik, *(stack_smernik+1), *(stack_smernik+2), *(stack_smernik+3), *(stack_smernik+4), *(stack_smernik+5), *(stack_smernik+6) );
 
 	// pokusim sa zistit info
-	if( ! (debuginfo_eip( *(stack_smernik+1), &info_volania ) < 0) ) {
+	if( debuginfo_eip( *(stack_smernik+1), &info_volania ) == 0 ) {
 		// pokial sa vyskytla chyba pri zistovani info nic nevypisem (funkcia vrati -1)
 	
 		cprintf("       %s:%d: %.*s+%d\n", info_volania.eip_file, info_volania.eip_line, info_volania.eip_fn_namelen, info_volania.eip_fn_name, *(stack_smernik+1) - info_volania.eip_fn_addr);

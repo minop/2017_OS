@@ -591,6 +591,11 @@ page_lookup(pde_t *pgdir, void *va, pte_t **pte_store)
 		return NULL;
 	}
 
+	// doplnenie: overenie, ci je na zazname namapovana stranka (na zapoctovke som to ale mal...)
+	if( !(*pte & PTE_P)) {
+		return NULL;
+	}
+
 	// pokial je pte_store != 0 mam tam ulozit pte
 	if(pte_store != 0) {
 		*pte_store = pte;
@@ -620,7 +625,8 @@ page_remove(pde_t *pgdir, void *va)
 	// Fill this function in
 
 	// je na 'va' namapovana nejaka stranka?
-	pte_t *pte = pgdir_walk(pgdir, va, false);
+	pte_t *pte;
+	page_lookup(pgdir, va, &pte);
 
 	// mam odkaz na zaznam?
 	if(pte == NULL) {
@@ -686,37 +692,46 @@ user_mem_check(struct Env *env, const void *va, size_t len, int perm)
 {
 	// LAB 3: Your code here.
 	
-	// vypocitam si zaciatocnu va zarovnanu na stranky a pocet stranok, ktore musim overit (podla kern/env.c region_alloc)
-	void *zacVa = (void*)ROUNDDOWN(va, PGSIZE);
-	int pocetStranok = (ROUNDUP(va+len, PGSIZE) - zacVa )/PGSIZE;
-	int i;
+	// po konzultaciach na cviceniach urobim tuto funkciu inak ako bola a pouzijem funkciu page_lookup (na jej existenciu som zabudol)
+	// myslim si vsak, ze moj postup kde "skacem po celych strankach" je spravny
+	// este aj komentar ku tejto funkcii hovori, ze mam overit iba 'len/PGSIZE' stranok
+	// kebyze som mal proste cyklus v ktorom overim vsetky adresy od 'va' po 'va+len' tak by som robil zbytocne az 1024x viac overovani!
+	// kazdu stranku staci overit raz, lebo vsetky adresy na nej maju rovnake prava
 
-	for(i = 0; i < pocetStranok; i++) {
+	void *cyklusVa = (void*)ROUNDDOWN(va, PGSIZE);
+	int i; // iteracna premenna
+
+	for(i = 0; cyklusVa+i*PGSIZE < va+len; i++) { // komentar hovori o otvorenom intervale
 		// (1)
-		if( !(zacVa+i*PGSIZE < (void*)ULIM)) {
+		if( !(cyklusVa+i*PGSIZE < (void*)ULIM)) {
 			// adresa nie je pod ULIM
-			if(zacVa+i*PGSIZE < va) {
-				user_mem_check_addr = (uintptr_t)(va);
+			// mam vratit PRVU adresu ktora zlyha (z intervalu <va; va+len) ), pre "nove" stranky je to prva adresa na danej stranke; pre tu stranku do ktorej ukazuje 'va' to vsak nemusi byt pravda
+			if(cyklusVa+i*PGSIZE < va) {
+				user_mem_check_addr = (uintptr_t)(va); // prva neplatna adresa nie je na zaciatku stranky
 			}
 			else {
-				user_mem_check_addr = (uintptr_t)(zacVa+i*PGSIZE); // nastavim prvu neplatnu adresu
+				user_mem_check_addr = (uintptr_t)(cyklusVa+i*PGSIZE); // -||- je na zaciatku stranky
 			}
 			return -E_FAULT; // vratim chybu
 		}
 
 		// (2)
-		pte_t *stranka = pgdir_walk(env->env_pgdir, zacVa+i*PGSIZE, false);
+		pte_t *stranka = NULL;
+		page_lookup(env->env_pgdir, cyklusVa+i*PGSIZE, &stranka);
 		// existuje vobec stranka?
 		if(stranka == NULL) {
-			if(zacVa+i*PGSIZE < va) user_mem_check_addr = (uintptr_t)va; 
-			else user_mem_check_addr = (uintptr_t)(zacVa+i*PGSIZE);
+			// rovnako ako v bode (1)
+			if(cyklusVa+i*PGSIZE < va) user_mem_check_addr = (uintptr_t)va; 
+			else user_mem_check_addr = (uintptr_t)(cyklusVa+i*PGSIZE);
+
 			return -E_FAULT;
 		}
-		// overim prava + ci je vobec pritomna
-		if( (*stranka & (perm | PTE_P)) != (perm | PTE_P) ) {
+		// overim prava (pritomnost overovat nemusim lebo to robi pg_lookup)
+		if( (*stranka & perm) != perm) {
 			// nejake prava chybaju
-			if (zacVa+i*PGSIZE < va) user_mem_check_addr = (uintptr_t)va;
-			else user_mem_check_addr = (uintptr_t)(zacVa+i*PGSIZE);
+			if (cyklusVa+i*PGSIZE < va) user_mem_check_addr = (uintptr_t)va;
+			else user_mem_check_addr = (uintptr_t)(cyklusVa+i*PGSIZE);
+
 			return -E_FAULT;
 		}
 	}
