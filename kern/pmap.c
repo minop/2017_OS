@@ -106,7 +106,28 @@ boot_alloc(uint32_t n)
 	//
 	// LAB 2: Your code here.
 
-	return NULL;
+	// n = 0 ==> return nextfree;
+	if(n == 0) {
+		return  nextfree;
+	}
+
+	// n > 0 ==> zistit, ci mam dost volnej pamate na n bytov
+	// npages * PGSIZE = cela pamat
+	// fyz adresa 'nextfree' = koniec zaplnenej casti
+	// jednotky udajov su v bytoch (najmensia vec, ktoru vie OS adresovat)
+	uint32_t volnychBytov = 4*1024*1024 - PADDR(nextfree); // mam namapovanych (k dispozicii) len 4MB a nie celu RAM!
+
+	if(n <= volnychBytov) {
+		result = nextfree;
+		// posunut nextfree na dalsi nasobok velkosti stranky
+		nextfree = ROUNDUP(nextfree + n, PGSIZE);
+	}
+	else {
+		// nemam dost miesta ==> panic
+		panic("boot_alloc() - nedostatok volnej pamate na alokovanie %d bytov\n", n);
+	}
+
+	return result;
 }
 
 // Set up a two-level page table:
@@ -128,7 +149,7 @@ mem_init(void)
 	i386_detect_memory();
 
 	// Remove this line when you're ready to test this function.
-	panic("mem_init: This function is not finished\n");
+	//panic("mem_init: This function is not finished\n");
 
 	//////////////////////////////////////////////////////////////////////
 	// create initial page directory.
@@ -152,10 +173,15 @@ mem_init(void)
 	// to initialize all fields of each struct PageInfo to 0.
 	// Your code goes here:
 
+	// na ulozenie mojej array 'pages' potrebujem npages * sizeof(PageInfo) miesta
+	pages = boot_alloc(npages*sizeof(struct PageInfo)); // alokujem pamat
+	memset(pages, 0, npages*sizeof(struct PageInfo)); // naplnim nulami
 
 	//////////////////////////////////////////////////////////////////////
 	// Make 'envs' point to an array of size 'NENV' of 'struct Env'.
 	// LAB 3: Your code here.
+
+	envs = boot_alloc(NENV * sizeof(struct Env));
 
 	//////////////////////////////////////////////////////////////////////
 	// Now that we've allocated the initial kernel data structures, we set
@@ -180,6 +206,12 @@ mem_init(void)
 	//    - pages itself -- kernel RW, user NONE
 	// Your code goes here:
 
+	// 'pages' su page aligned (lebo boot_alloc ich tak alokuje)
+	boot_map_region(kern_pgdir, UPAGES, ROUNDUP(npages*sizeof(struct PageInfo), PGSIZE)/PGSIZE, PADDR(pages), PTE_U | PTE_P);
+	// preco ROUNDUP? parameter 'size' v boot_map_region ma byt multiple of page size a ja si nie som isty, ci je to tak na 100% kazdopadne by sa tim nemalo nic pokazit, kedze ta pamat JE alokovana
+
+	// TIL: nepopliest si, ktore adresy sa maju mapovat kam, to CO chcem namapovat je fyzicka adressa a to KAM to chcem namapovat je virtualna (stravil som dost casu tym, ze som zistovola preco to nejde ked som tam dal tie argumenty naopak T_T)
+
 	//////////////////////////////////////////////////////////////////////
 	// Map the 'envs' array read-only by the user at linear address UENVS
 	// (ie. perm = PTE_U | PTE_P).
@@ -187,6 +219,8 @@ mem_init(void)
 	//    - the new image at UENVS  -- kernel R, user R
 	//    - envs itself -- kernel RW, user NONE
 	// LAB 3: Your code here.
+
+	boot_map_region(kern_pgdir, UENVS, ROUNDUP(NENV*sizeof(struct Env), PGSIZE)/PGSIZE, PADDR(envs), PTE_U | PTE_P);
 
 	//////////////////////////////////////////////////////////////////////
 	// Use the physical memory that 'bootstack' refers to as the kernel
@@ -200,6 +234,12 @@ mem_init(void)
 	//     Permissions: kernel RW, user NONE
 	// Your code goes here:
 
+	// myslim, ze mam konat obdobne ako hore tu VIEM, ze 'size' je nasobkom PGSIZE lebo je to konstanta tak definovana v subore 'inc/memlayout.h'
+	boot_map_region(kern_pgdir, (KSTACKTOP-KSTKSIZE), KSTKSIZE, PADDR(bootstack), PTE_W | PTE_P);
+	// pamat podtym NESMIEM namapovat aby sa to pokazilo ked sem pretecie zasobnik
+
+	// KSTKSIZE uz je v jednotkach PGSIZE takze to nesmiem prevadzat
+
 	//////////////////////////////////////////////////////////////////////
 	// Map all of physical memory at KERNBASE.
 	// Ie.  the VA range [KERNBASE, 2^32) should map to
@@ -210,8 +250,12 @@ mem_init(void)
 	// Your code goes here:
 
 	// Initialize the SMP-related parts of the memory map
-	mem_init_mp();
+	mem_init_mp(); // nove v lab4
 
+	// do tretice npages*PGSIZE
+	boot_map_region(kern_pgdir, KERNBASE, ( -KERNBASE )/PGSIZE, 0, PTE_W | PTE_P);
+	// to cislo je 2^32 je 33b cislo a teda sa ulozi ako 0 a 0 - KERNBASE = -KERNBASE
+	
 	// Check that the initial page directory has been set up correctly.
 	check_kern_pgdir();
 
@@ -304,6 +348,45 @@ page_init(void)
 		pages[i].pp_link = page_free_list;
 		page_free_list = &pages[i];
 	}
+
+	// kod hore nastavil vsetky stranky ako volne a pridal ich do zretazeneho zoznamu volnych stranok - stranka s najnizsou adresou (prva) je na poslednom mieste v zozname
+
+	// moja uloha je prejst zoznamom a nasledujuce stranky oznacit ako pouzivane (nastavit pocet referencii na cislo > 0 a vyhodit ich zo zoznamu)
+	// stranky ktore musim vyhodit:
+	// 1) stranka s indexom 0 ==> stranka na poslednom mieste zretazeneho zoznamu
+	// 2) volne stranky ==> nezaujima ma
+	// 3) stranky medzi [IOPHYSMEM, EXPHYSMEM) treba vyhodit ==> vypocitam si ich indexy tym, ze ich adresu podelim velkostou stranky
+	// 4) od EXPHYSMEM (1MB) je kernel a za nim je volno ==> koniec kernelu by som mal vediet zistit volanim boot_alloc(0)
+
+	// najlahzsie prejdem zoznamom pomocou pointra na pointer
+	// (*smernik) (prvok s ktorym chcem pracovat)->pp_link (prvok na dalsom mieste v zozname)
+
+	struct PageInfo **smernik = &page_free_list; // takymto postupom mozem zmenit aj prvy prvok bez extra osetrovania
+
+	while( *smernik != NULL /* kym aktualny prvok nie je koniec zoznamu */) {
+		// bod 3) a 4)  [IOPHYSMEM, EXPHYSMEM) + [EXPHYSMEM, fyz adres od boot_alloc(0) )
+		if( page2pa( (*smernik) ) >= IOPHYSMEM && page2pa( (*smernik) ) < PADDR( boot_alloc(0) ) ) {
+			// stranka s ktorou pracujem je v diere pre I/O zariadenia ==> treba ju vyradit zo zoznamu prazdnych stranok
+			(*smernik)->pp_ref = 1;
+			struct PageInfo *pomocny = (*smernik)->pp_link;
+			(*smernik)->pp_link = NULL;
+			(*smernik) = pomocny;
+			// POZOR DUPLICITNY KOD!!!! AK TU MAS CHYBU OPRAV JU AJ DOLE
+		}
+		// bod 1) stranka na fyz adrese 0 (spojit to do jednej podmienky by to urobilo dost neprehladne, hcoi takto mam duplicitny kod)
+		else if( page2pa( (*smernik) ) == 0 ) {
+			(*smernik)->pp_ref = 1;
+			struct PageInfo *pomocny = (*smernik)->pp_link;
+			(*smernik)->pp_link = NULL;
+			(*smernik) = pomocny;
+			// POZOR DUPLICITNY KOD!!!! AK TU MAS CHYBU OPRAV JU AJ HORE
+		}
+		// najdolezitejsia vec! Nezabudnut sa posunut v zozname dalej pokial som nic nezmazal
+		else {
+			smernik = &( (*smernik)->pp_link ); // chcem adresu premennej v ktorej je pointer ukazujuci na dalsi prvok (to by malo byt toto...)
+		}
+	}
+
 }
 
 //
@@ -322,7 +405,23 @@ struct PageInfo *
 page_alloc(int alloc_flags)
 {
 	// Fill this function in
-	return 0;
+
+	if(page_free_list == NULL) {
+		// nie je ziadna stranka volna => vrat NULL
+		return NULL;
+	}
+
+	// vyberieme stranku zo zoznamu volnych stranok
+	struct PageInfo *alokovanaStranka = page_free_list;
+	page_free_list = page_free_list->pp_link;
+	alokovanaStranka->pp_link = NULL;
+
+	// vyplnim stranku 0 ak treba
+	if(alloc_flags & ALLOC_ZERO) {
+		memset(page2kva(alokovanaStranka), 0, PGSIZE);
+	}
+
+	return alokovanaStranka;
 }
 
 //
@@ -335,6 +434,14 @@ page_free(struct PageInfo *pp)
 	// Fill this function in
 	// Hint: You may want to panic if pp->pp_ref is nonzero or
 	// pp->pp_link is not NULL.
+
+	if(pp->pp_ref != 0 || pp->pp_link != NULL) {
+		panic("page_free() - pp_ref is nonzero or pp_link is not NULL\n");
+	}
+
+	// pridat stranku do zoznamu volnych
+	pp->pp_link = page_free_list;
+	page_free_list = pp;	
 }
 
 //
@@ -374,10 +481,41 @@ pte_t *
 pgdir_walk(pde_t *pgdir, const void *va, int create)
 {
 	// Fill this function in
-	return NULL;
+
+	// podla prednasky
+	uintptr_t *pde = &(pgdir[PDX(va)]); // adresa riadka v page directory na ktorom sa nachadza adresa page table (+ prava), kde by mala byt nasa stranka
+	// pde = page directory entry
+	
+	// je v PD zaznam o PT? --> ak nie a mam ho vytvorit tak to urboim, ak nemam tak vratim NULL
+	if( !(*pde & PTE_P) ) {
+		// stranka nie je pritomna, mam ju vytvorit?
+		if(create == false) {
+			return NULL;
+		}
+
+		// vytvorim novu stranku
+		struct PageInfo *novy_pde = page_alloc(ALLOC_ZERO);
+		
+		if(novy_pde == NULL) {
+			// chyba pri alokacii vrat NULL
+			return NULL;
+		}	
+	
+		novy_pde->pp_ref++;
+		novy_pde->pp_link = NULL;
+
+		// uloz zaznam do tabulky
+		*pde = page2pa(novy_pde) | PTE_P | PTE_W | PTE_U; // ulozim zaznam do PT + prava
+	}
+
+	// zaznam je v tabulke -> ziskajme si pointer na PT
+
+	uintptr_t *pgtab = KADDR(PTE_ADDR(*pde)); // virtualna adresa z fyzickej adresy ulozenej v pde
+	
+	// vratim pointer na riadok PT, ktory vyzadujeme
+	return &(pgtab[PTX(va)]);
 }
 
-//
 // Map [va, va+size) of virtual address space to physical [pa, pa+size)
 // in the page table rooted at pgdir.  Size is a multiple of PGSIZE, and
 // va and pa are both page-aligned.
@@ -392,6 +530,18 @@ static void
 boot_map_region(pde_t *pgdir, uintptr_t va, size_t size, physaddr_t pa, int perm)
 {
 	// Fill this function in
+
+	// pp_ref nemam inkrementovat, mam ale riesit pp_link? (nebudem)
+		
+	size_t i; // je v jednotkach PGSIZE pretoze inac mi ten posledny boot_map_region nezbehne lebo mi pretecie integer T_T (kolko som zabil casu, kym som na to prisiel....)
+	for(i = 0; va+i < va+size; i = i + 1) {
+		pte_t *pte = pgdir_walk(pgdir, (void*) (va + i*PGSIZE), true); // namapovat znamena, ze to mam vybavit takze musim vytvorit pripadne potrebne page tables
+		*pte = (pa+i*PGSIZE) | perm | PTE_P;
+
+		// vobec neriesim, ci nahodou neprepisujem ine mapovanie, hint ale nenaznacuje, ze mam uvolnovat nejake stranky predpokladam teda, ze to netreba robit (z nazvu funkcie sa da usudzovat, ze sa pouziva iba pri starte a teda tam aj tak nic namapovane nebude)
+	}
+
+	return;
 }
 
 //
@@ -423,6 +573,30 @@ int
 page_insert(pde_t *pgdir, struct PageInfo *pp, void *va, int perm)
 {
 	// Fill this function in
+
+	// ziskaj *pte pre nasu 'va'; pokial neexistuje page table chceme ju vytvorit
+	pte_t *pte = pgdir_walk(pgdir, va, true);
+	
+	if(pte == NULL) {
+		// nebolo mozne vytvorit page table
+		return -E_NO_MEM;
+	}
+	
+	// pred tym ako budem riesit pridavanie stranky zvysim pp_ref o 1, v corner-case pripade (ked zavolam page_remove()) nebude tato stranka uvolnena (mala by mat pp_ref aspon 2)
+	pp->pp_ref++;
+
+	// mam *pte chcem pozriet, ci tam je uz namapovana nejaka stranka, aby som ju mohol odstranit ()	
+	
+	if(*pte & PTE_P) {
+		// v pte sa uz nachadza nejaka stranka --> uvolnim ju
+		page_remove(pgdir, va);
+
+		// v pte bola pritomna stranka treba invalidovat TLB (robi funkcia page_remove)
+	}
+
+	// pte je prazdne mozem tam zapisat fyzicku adresu stranky + prava
+	*pte = page2pa(pp) | perm | PTE_P;
+
 	return 0;
 }
 
@@ -441,7 +615,26 @@ struct PageInfo *
 page_lookup(pde_t *pgdir, void *va, pte_t **pte_store)
 {
 	// Fill this function in
-	return NULL;
+
+	// ziskajme 'pte' odpovedajuce 'va'
+	pte_t *pte = pgdir_walk(pgdir, va, false);
+
+	if(pte == NULL) {
+		// stranka nie je namapovana ==> vrat NULL
+		return NULL;
+	}
+
+	// doplnenie: overenie, ci je na zazname namapovana stranka (na zapoctovke som to ale mal...)
+	if( !(*pte & PTE_P)) {
+		return NULL;
+	}
+
+	// pokial je pte_store != 0 mam tam ulozit pte
+	if(pte_store != 0) {
+		*pte_store = pte;
+	}	
+
+	return pa2page(*pte);
 }
 
 //
@@ -463,6 +656,36 @@ void
 page_remove(pde_t *pgdir, void *va)
 {
 	// Fill this function in
+
+	// je na 'va' namapovana nejaka stranka?
+	pte_t *pte;
+	page_lookup(pgdir, va, &pte);
+
+	// mam odkaz na zaznam?
+	if(pte == NULL) {
+		return;
+	}
+
+	// je na 'va' namapovana stranka?
+	if(*pte & PTE_P) {
+		// ref count stranky treba znizit a ak je 0 tak ju treba uvolnit --> vsetko toto robi funkcia page_decref --> potrebujem PageInfo stranky
+		
+		struct PageInfo *pi_stranky = pa2page(*pte);
+
+		page_decref(pi_stranky);
+		
+		// nastavit obsah pte na 0
+		*pte = 0;
+
+		// posledny bod ma byt invalidovane TLB (po kratkom googleni, by to mal byt nejaky buffer, v ktory sa pouziva pri preklade aby sa usetril cas. Tym, ze sme odmapovali stranku treba povedat, ze ten buffer je zneplatneny)
+		tlb_invalidate(pgdir, va);
+
+		return;
+	}
+	else {
+		// stranka nie je napamovana ==> silently does nothing
+		return;
+	}
 }
 
 //
@@ -536,7 +759,52 @@ int
 user_mem_check(struct Env *env, const void *va, size_t len, int perm)
 {
 	// LAB 3: Your code here.
+	
+	// po konzultaciach na cviceniach urobim tuto funkciu inak ako bola a pouzijem funkciu page_lookup (na jej existenciu som zabudol)
+	// myslim si vsak, ze moj postup kde "skacem po celych strankach" je spravny
+	// este aj komentar ku tejto funkcii hovori, ze mam overit iba 'len/PGSIZE' stranok
+	// kebyze som mal proste cyklus v ktorom overim vsetky adresy od 'va' po 'va+len' tak by som robil zbytocne az 1024x viac overovani!
+	// kazdu stranku staci overit raz, lebo vsetky adresy na nej maju rovnake prava
 
+	void *cyklusVa = (void*)ROUNDDOWN(va, PGSIZE);
+	int i; // iteracna premenna
+
+	for(i = 0; cyklusVa+i*PGSIZE < va+len; i++) { // komentar hovori o otvorenom intervale
+		// (1)
+		if( !(cyklusVa+i*PGSIZE < (void*)ULIM)) {
+			// adresa nie je pod ULIM
+			// mam vratit PRVU adresu ktora zlyha (z intervalu <va; va+len) ), pre "nove" stranky je to prva adresa na danej stranke; pre tu stranku do ktorej ukazuje 'va' to vsak nemusi byt pravda
+			if(cyklusVa+i*PGSIZE < va) {
+				user_mem_check_addr = (uintptr_t)(va); // prva neplatna adresa nie je na zaciatku stranky
+			}
+			else {
+				user_mem_check_addr = (uintptr_t)(cyklusVa+i*PGSIZE); // -||- je na zaciatku stranky
+			}
+			return -E_FAULT; // vratim chybu
+		}
+
+		// (2)
+		pte_t *stranka = NULL;
+		page_lookup(env->env_pgdir, cyklusVa+i*PGSIZE, &stranka);
+		// existuje vobec stranka?
+		if(stranka == NULL) {
+			// rovnako ako v bode (1)
+			if(cyklusVa+i*PGSIZE < va) user_mem_check_addr = (uintptr_t)va; 
+			else user_mem_check_addr = (uintptr_t)(cyklusVa+i*PGSIZE);
+
+			return -E_FAULT;
+		}
+		// overim prava (pritomnost overovat nemusim lebo to robi pg_lookup)
+		if( (*stranka & perm) != perm) {
+			// nejake prava chybaju
+			if (cyklusVa+i*PGSIZE < va) user_mem_check_addr = (uintptr_t)va;
+			else user_mem_check_addr = (uintptr_t)(cyklusVa+i*PGSIZE);
+
+			return -E_FAULT;
+		}
+	}
+
+	// ak sa nenasla ziadna chyba uspesne skoncim
 	return 0;
 }
 
@@ -814,13 +1082,13 @@ check_page(void)
 
 	// should be no free memory
 	assert(!page_alloc(0));
-
+	
 	// there is no page allocated at address 0
 	assert(page_lookup(kern_pgdir, (void *) 0x0, &ptep) == NULL);
-
+	
 	// there is no free memory, so we can't allocate a page table
 	assert(page_insert(kern_pgdir, pp1, 0x0, PTE_W) < 0);
-
+	
 	// free pp0 and try again: pp0 should be used for page table
 	page_free(pp0);
 	assert(page_insert(kern_pgdir, pp1, 0x0, PTE_W) == 0);
@@ -828,7 +1096,7 @@ check_page(void)
 	assert(check_va2pa(kern_pgdir, 0x0) == page2pa(pp1));
 	assert(pp1->pp_ref == 1);
 	assert(pp0->pp_ref == 1);
-
+	
 	// should be able to map pp2 at PGSIZE because pp0 is already allocated for page table
 	assert(page_insert(kern_pgdir, pp2, (void*) PGSIZE, PTE_W) == 0);
 	assert(check_va2pa(kern_pgdir, PGSIZE) == page2pa(pp2));

@@ -72,6 +72,26 @@ trap_init(void)
 	extern struct Segdesc gdt[];
 
 	// LAB 3: Your code here.
+	
+	extern void TH_DIVIDE(); 	SETGATE(idt[T_DIVIDE], 0, GD_KT, TH_DIVIDE, 0); 
+	extern void TH_DEBUG(); 	SETGATE(idt[T_DEBUG], 0, GD_KT, TH_DEBUG, 0); 
+	extern void TH_NMI(); 		SETGATE(idt[T_NMI], 0, GD_KT, TH_NMI, 0); 
+	extern void TH_BRKPT(); 	SETGATE(idt[T_BRKPT], 0, GD_KT, TH_BRKPT, 3); 
+	extern void TH_OFLOW(); 	SETGATE(idt[T_OFLOW], 0, GD_KT, TH_OFLOW, 0); 
+	extern void TH_BOUND(); 	SETGATE(idt[T_BOUND], 0, GD_KT, TH_BOUND, 0); 
+	extern void TH_ILLOP(); 	SETGATE(idt[T_ILLOP], 0, GD_KT, TH_ILLOP, 0); 
+	extern void TH_DEVICE(); 	SETGATE(idt[T_DEVICE], 0, GD_KT, TH_DEVICE, 0); 
+	extern void TH_DBLFLT(); 	SETGATE(idt[T_DBLFLT], 0, GD_KT, TH_DBLFLT, 0); 
+	extern void TH_TSS(); 		SETGATE(idt[T_TSS], 0, GD_KT, TH_TSS, 0); 
+	extern void TH_SEGNP(); 	SETGATE(idt[T_SEGNP], 0, GD_KT, TH_SEGNP, 0); 
+	extern void TH_STACK(); 	SETGATE(idt[T_STACK], 0, GD_KT, TH_STACK, 0); 
+	extern void TH_GPFLT(); 	SETGATE(idt[T_GPFLT], 0, GD_KT, TH_GPFLT, 0); 
+	extern void TH_PGFLT(); 	SETGATE(idt[T_PGFLT], 0, GD_KT, TH_PGFLT, 0); 
+	extern void TH_FPERR(); 	SETGATE(idt[T_FPERR], 0, GD_KT, TH_FPERR, 0); 
+	extern void TH_ALIGN(); 	SETGATE(idt[T_ALIGN], 0, GD_KT, TH_ALIGN, 0); 
+	extern void TH_MCHK(); 		SETGATE(idt[T_MCHK], 0, GD_KT, TH_MCHK, 0); 
+	extern void TH_SIMDERR(); 	SETGATE(idt[T_SIMDERR], 0, GD_KT, TH_SIMDERR, 0); 
+	extern void TH_SYSCALL(); 	SETGATE(idt[T_SYSCALL], 1, GD_KT, TH_SYSCALL, 3); 
 
 	// Per-CPU setup 
 	trap_init_percpu();
@@ -110,7 +130,6 @@ trap_init_percpu(void)
 	// when we trap to the kernel.
 	ts.ts_esp0 = KSTACKTOP;
 	ts.ts_ss0 = GD_KD;
-	ts.ts_iomb = sizeof(struct Taskstate);
 
 	// Initialize the TSS slot of the gdt.
 	gdt[GD_TSS0 >> 3] = SEG16(STS_T32A, (uint32_t) (&ts),
@@ -176,6 +195,30 @@ trap_dispatch(struct Trapframe *tf)
 {
 	// Handle processor exceptions.
 	// LAB 3: Your code here.
+	int32_t navratovaH;	
+
+	// podla cisla vynimky presmerujem jej spracovanie (inc/trap.h)
+	// ked sa spracuje volanie myslim si, ze by som mal ukoncit funkciu, za switchom je totiz osetrenie nespracovaneho volania kam sa program aj po spravnom spracovani vzdy dostane... (ak je to zle tak sa to snad prejavi v buducnosti)
+	switch(tf->tf_trapno) {
+		case T_PGFLT: // page fault
+			page_fault_handler(tf);
+			return;
+
+		case T_BRKPT: // breakpoint
+			monitor(tf); // spustim monitor
+			return;
+
+		case T_SYSCALL: // systemove volanie
+			navratovaH = syscall(	tf->tf_regs.reg_eax, /* v registri eax je cislo sys volania */\
+						tf->tf_regs.reg_edx, \
+						tf->tf_regs.reg_ecx, \
+						tf->tf_regs.reg_ebx, \
+						tf->tf_regs.reg_edi, \
+						tf->tf_regs.reg_esi);
+			// nahrat navratovu hodnotu do registra eax
+			tf->tf_regs.reg_eax = navratovaH;		
+			return;
+	}
 
 	// Handle spurious interrupts
 	// The hardware sometimes raises these because of noise on the
@@ -271,6 +314,11 @@ page_fault_handler(struct Trapframe *tf)
 	// Handle kernel-mode page faults.
 
 	// LAB 3: Your code here.
+	
+	if((tf->tf_cs & 0x3) == 0) {
+		// spodne dva bity 'code segment' registra su nulove => nachadzam sa v jadre
+		panic("Page fault in kernel accesing va %08x\n", fault_va);
+	}
 
 	// We've already handled kernel-mode exceptions, so if we get here,
 	// the page fault happened in user mode.
