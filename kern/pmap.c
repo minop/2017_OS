@@ -357,6 +357,7 @@ page_init(void)
 	// 2) volne stranky ==> nezaujima ma
 	// 3) stranky medzi [IOPHYSMEM, EXPHYSMEM) treba vyhodit ==> vypocitam si ich indexy tym, ze ich adresu podelim velkostou stranky
 	// 4) od EXPHYSMEM (1MB) je kernel a za nim je volno ==> koniec kernelu by som mal vediet zistit volanim boot_alloc(0)
+	// lab4: 5) stranka na MPENTRY_PADDR nema byt volna
 
 	// najlahzsie prejdem zoznamom pomocou pointra na pointer
 	// (*smernik) (prvok s ktorym chcem pracovat)->pp_link (prvok na dalsom mieste v zozname)
@@ -380,6 +381,14 @@ page_init(void)
 			(*smernik)->pp_link = NULL;
 			(*smernik) = pomocny;
 			// POZOR DUPLICITNY KOD!!!! AK TU MAS CHYBU OPRAV JU AJ HORE
+		}
+		// lab4: 5) opat duplicitny kod ale uprimne si uz nie som isty ako som to prechadzal takze sa aj tesim
+		else if( page2pa( (*smernik) ) == MPENTRY_PADDR) {
+			(*smernik)->pp_ref = 1;
+			struct PageInfo *pomocny = (*smernik)->pp_link;
+			(*smernik)->pp_link = NULL;
+			(*smernik) = pomocny;
+			// DUPLICITNY KOD!!!! (triplicitny?)
 		}
 		// najdolezitejsia vec! Nezabudnut sa posunut v zozname dalej pokial som nic nezmazal
 		else {
@@ -732,7 +741,26 @@ mmio_map_region(physaddr_t pa, size_t size)
 	// Hint: The staff solution uses boot_map_region.
 	//
 	// Your code here:
-	panic("mmio_map_region not implemented");
+
+
+	// size treba zaokruhlit nahor na PGSIZE
+	size = ROUNDUP(size, PGSIZE);
+
+	// namapovat na 'base' ale iba ak mam dost miesta!
+	if(base+size <= MMIOLIM) {
+		// mam dost miesta => namapujem
+		boot_map_region(kern_pgdir, base, size, pa, PTE_PCD|PTE_PWT|PTE_W);
+		// chcem vratit pointer na base tak si ho musim ulozit
+		void* baseRet = (void*)base;
+
+		base += size; // posuniem base na dalsiu volnu pamat
+
+		return baseRet;
+	}
+	else {
+		// uz nemam dost pamate na namapovanie MMIO => panic
+		panic("Nedostatok pamate na namapovanie MMIO!\n");
+	}
 }
 
 static uintptr_t user_mem_check_addr;
