@@ -207,7 +207,7 @@ mem_init(void)
 	// Your code goes here:
 
 	// 'pages' su page aligned (lebo boot_alloc ich tak alokuje)
-	boot_map_region(kern_pgdir, UPAGES, ROUNDUP(npages*sizeof(struct PageInfo), PGSIZE)/PGSIZE, PADDR(pages), PTE_U | PTE_P);
+	boot_map_region(kern_pgdir, UPAGES, ROUNDUP(npages*sizeof(struct PageInfo), PGSIZE), PADDR(pages), PTE_U | PTE_P);
 	// preco ROUNDUP? parameter 'size' v boot_map_region ma byt multiple of page size a ja si nie som isty, ci je to tak na 100% kazdopadne by sa tim nemalo nic pokazit, kedze ta pamat JE alokovana
 
 	// TIL: nepopliest si, ktore adresy sa maju mapovat kam, to CO chcem namapovat je fyzicka adressa a to KAM to chcem namapovat je virtualna (stravil som dost casu tym, ze som zistovola preco to nejde ked som tam dal tie argumenty naopak T_T)
@@ -220,7 +220,7 @@ mem_init(void)
 	//    - envs itself -- kernel RW, user NONE
 	// LAB 3: Your code here.
 
-	boot_map_region(kern_pgdir, UENVS, ROUNDUP(NENV*sizeof(struct Env), PGSIZE)/PGSIZE, PADDR(envs), PTE_U | PTE_P);
+	boot_map_region(kern_pgdir, UENVS, ROUNDUP(NENV*sizeof(struct Env), PGSIZE), PADDR(envs), PTE_U | PTE_P);
 
 	//////////////////////////////////////////////////////////////////////
 	// Use the physical memory that 'bootstack' refers to as the kernel
@@ -253,8 +253,8 @@ mem_init(void)
 	mem_init_mp(); // nove v lab4: mapovanie pamate pre zasobniky viacerych procesorov
 
 	// do tretice npages*PGSIZE
-	boot_map_region(kern_pgdir, KERNBASE, ( -KERNBASE )/PGSIZE, 0, PTE_W | PTE_P);
-	// to cislo je 2^32 je 33b cislo a teda sa ulozi ako 0 a 0 - KERNBASE = -KERNBASE
+	boot_map_region(kern_pgdir, KERNBASE, -KERNBASE, 0, PTE_W | PTE_P);
+	// 2^32 je 33b cislo a teda sa ulozi ako 0 a 0 - KERNBASE = -KERNBASE
 	
 	// Check that the initial page directory has been set up correctly.
 	check_kern_pgdir();
@@ -527,11 +527,14 @@ boot_map_region(pde_t *pgdir, uintptr_t va, size_t size, physaddr_t pa, int perm
 	// Fill this function in
 
 	// pp_ref nemam inkrementovat, mam ale riesit pp_link? (nebudem)
+
+	// size je v Bytoch ale je nasobkom PGSIZE (kolko krat mi cviciaci vravel, ze to nemam robit tak, ako som to robil a ja som ho nepocuval...)
 		
-	size_t i; // je v jednotkach PGSIZE pretoze inac mi ten posledny boot_map_region nezbehne lebo mi pretecie integer T_T (kolko som zabil casu, kym som na to prisiel....)
-	for(i = 0; va+i < va+size; i = i + 1) {
-		pte_t *pte = pgdir_walk(pgdir, (void*) (va + i*PGSIZE), true); // namapovat znamena, ze to mam vybavit takze musim vytvorit pripadne potrebne page tables
-		*pte = (pa+i*PGSIZE) | perm | PTE_P;
+	size_t i;
+	// nemusim porovnavat va+i < va+size pretoze je to zbytocne + to v pripade poslednej alokacie pretecie a nefunguje
+	for(i = 0; i < size; i += PGSIZE) {
+		pte_t *pte = pgdir_walk(pgdir, (void*) (va + i), true); // namapovat znamena, ze to mam vybavit takze musim vytvorit pripadne potrebne page tables
+		*pte = (pa+i) | perm | PTE_P;
 
 		// vobec neriesim, ci nahodou neprepisujem ine mapovanie, hint ale nenaznacuje, ze mam uvolnovat nejake stranky predpokladam teda, ze to netreba robit (z nazvu funkcie sa da usudzovat, ze sa pouziva iba pri starte a teda tam aj tak nic namapovane nebude)
 	}
