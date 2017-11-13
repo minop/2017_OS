@@ -348,60 +348,40 @@ page_init(void)
 	// Change the code to reflect this.
 	// NB: DO NOT actually touch the physical memory corresponding to
 	// free pages!
+
+	// ukazalo sa, ze som tuto funkciu implementoval ako retard
+	// je ovela jednoduchsie skontrolovat stranky pocas toho, ako
+	// vytrvatam zoznam volnych stranok, nez to robit az ked je tento
+	// zoznam vytvoreny
+	// menej retardovana implementacia:
+
 	size_t i;
 	for (i = 0; i < npages; i++) {
-		pages[i].pp_ref = 0;
-		pages[i].pp_link = page_free_list;
-		page_free_list = &pages[i];
-	}
-
-	// kod hore nastavil vsetky stranky ako volne a pridal ich do zretazeneho zoznamu volnych stranok - stranka s najnizsou adresou (prva) je na poslednom mieste v zozname
-
-	// moja uloha je prejst zoznamom a nasledujuce stranky oznacit ako pouzivane (nastavit pocet referencii na cislo > 0 a vyhodit ich zo zoznamu)
-	// stranky ktore musim vyhodit:
-	// 1) stranka s indexom 0 ==> stranka na poslednom mieste zretazeneho zoznamu
-	// 2) volne stranky ==> nezaujima ma
-	// 3) stranky medzi [IOPHYSMEM, EXPHYSMEM) treba vyhodit ==> vypocitam si ich indexy tym, ze ich adresu podelim velkostou stranky
-	// 4) od EXPHYSMEM (1MB) je kernel a za nim je volno ==> koniec kernelu by som mal vediet zistit volanim boot_alloc(0)
-	// lab4: 5) stranka na MPENTRY_PADDR nema byt volna
-
-	// najlahzsie prejdem zoznamom pomocou pointra na pointer
-	// (*smernik) (prvok s ktorym chcem pracovat)->pp_link (prvok na dalsom mieste v zozname)
-
-	struct PageInfo **smernik = &page_free_list; // takymto postupom mozem zmenit aj prvy prvok bez extra osetrovania
-
-	while( *smernik != NULL /* kym aktualny prvok nie je koniec zoznamu */) {
-		// bod 3) a 4)  [IOPHYSMEM, EXPHYSMEM) + [EXPHYSMEM, fyz adres od boot_alloc(0) )
-		if( page2pa( (*smernik) ) >= IOPHYSMEM && page2pa( (*smernik) ) < PADDR( boot_alloc(0) ) ) {
-			// stranka s ktorou pracujem je v diere pre I/O zariadenia ==> treba ju vyradit zo zoznamu prazdnych stranok
-			(*smernik)->pp_ref = 1;
-			struct PageInfo *pomocny = (*smernik)->pp_link;
-			(*smernik)->pp_link = NULL;
-			(*smernik) = pomocny;
-			// POZOR DUPLICITNY KOD!!!! AK TU MAS CHYBU OPRAV JU AJ DOLE
+		
+		// 1) stranka s fyzickou adresou 0
+		if(page2pa(&pages[i]) == 0) {
+			// oznac ako pouzivanu (mal by som si na to spravit funkciu)
+			pages[i].pp_ref = 1;
+			pages[i].pp_link = NULL; // asi je null kedze som alokoval stranky ako nulove ale neublizi to
 		}
-		// bod 1) stranka na fyz adrese 0 (spojit to do jednej podmienky by to urobilo dost neprehladne, hcoi takto mam duplicitny kod)
-		else if( page2pa( (*smernik) ) == 0 ) {
-			(*smernik)->pp_ref = 1;
-			struct PageInfo *pomocny = (*smernik)->pp_link;
-			(*smernik)->pp_link = NULL;
-			(*smernik) = pomocny;
-			// POZOR DUPLICITNY KOD!!!! AK TU MAS CHYBU OPRAV JU AJ HORE
+		// 3) + 4) stranky v intervale [IOPHYSMEM, boot_alloc(0))
+		else if(page2pa(&pages[i]) >= IOPHYSMEM && page2pa(&pages[i]) < PADDR(boot_alloc(0)) ) {
+			// pouzivane
+			pages[i].pp_ref = 1;
+			pages[i].pp_link = NULL;
 		}
-		// lab4: 5) opat duplicitny kod ale uprimne si uz nie som isty ako som to prechadzal takze sa aj tesim
-		else if( page2pa( (*smernik) ) == MPENTRY_PADDR) {
-			(*smernik)->pp_ref = 1;
-			struct PageInfo *pomocny = (*smernik)->pp_link;
-			(*smernik)->pp_link = NULL;
-			(*smernik) = pomocny;
-			// DUPLICITNY KOD!!!! (triplicitny?)
+		// lab4 5) stranka s adresou MPENTRY_PADDR
+		else if(page2pa(&pages[i]) == MPENTRY_PADDR) {
+			pages[i].pp_ref = 1;
+			pages[i].pp_link = NULL;
 		}
-		// najdolezitejsia vec! Nezabudnut sa posunut v zozname dalej pokial som nic nezmazal
+		// 2) ostatne stranky pridam do zoznamu volnych
 		else {
-			smernik = &( (*smernik)->pp_link ); // chcem adresu premennej v ktorej je pointer ukazujuci na dalsi prvok (to by malo byt toto...)
+			pages[i].pp_ref = 0;
+			pages[i].pp_link = page_free_list;
+			page_free_list = &pages[i];
 		}
 	}
-
 }
 
 //
