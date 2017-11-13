@@ -250,7 +250,7 @@ mem_init(void)
 	// Your code goes here:
 
 	// Initialize the SMP-related parts of the memory map
-	mem_init_mp(); // nove v lab4
+	mem_init_mp(); // nove v lab4: mapovanie pamate pre zasobniky viacerych procesorov
 
 	// do tretice npages*PGSIZE
 	boot_map_region(kern_pgdir, KERNBASE, ( -KERNBASE )/PGSIZE, 0, PTE_W | PTE_P);
@@ -304,6 +304,12 @@ mem_init_mp(void)
 	//
 	// LAB 4: Your code here:
 
+	int i;
+	// pamat pre cpu0 budem mapovat dva krat na to iste miesto, ale to by nemalo prekazat
+
+	for( i=0; i < NCPU; ++i) {
+		boot_map_region(kern_pgdir, KSTACKTOP - KSTKSIZE - i*(KSTKSIZE+KSTKGAP), KSTKSIZE, (physaddr_t) percpu_kstacks[i], PTE_W); // pravo R je automaticky
+	}
 }
 
 // --------------------------------------------------------------
