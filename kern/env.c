@@ -629,6 +629,9 @@ env_run(struct Env *e)
 	// 1.5
 	lcr3(PADDR(curenv->env_pgdir));
 
+	// (lab4) "tesne pred prepnutim sa do uzivatelskeho priestoru" musim uvolnit zamok jadra
+	unlock_kernel();
+
 	// 2.
 	env_pop_tf(&(curenv->env_tf));
 }
