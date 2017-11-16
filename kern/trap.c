@@ -130,6 +130,7 @@ trap_init_percpu(void)
 	// when we trap to the kernel.
 	thiscpu->cpu_ts.ts_esp0 = KSTACKTOP - cpunum()*(KSTKSIZE + KSTKGAP); // ts.ts_esp0 = KSTACKTOP;
 	thiscpu->cpu_ts.ts_ss0 = GD_KD; // ts.ts_ss0 = GD_KD;
+	thiscpu->cpu_ts.ts_iomb = sizeof(struct Taskstate); // podla konzultacii s cviciacimi (iomb sa podla intel manualu nachadza na konci Taskstate segmentu)
 
 	// Initialize the TSS slot of the gdt.
 	gdt[(GD_TSS0 >> 3) + cpunum()] = SEG16(STS_T32A, (uint32_t) &(thiscpu->cpu_ts), sizeof(struct Taskstate) - 1, 0);
