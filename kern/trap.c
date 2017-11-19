@@ -356,6 +356,52 @@ page_fault_handler(struct Trapframe *tf)
 
 	// LAB 4: Your code here.
 
+	// page fault v user mode
+	// existuje page fault upcall? (ak nie nebudem ho moct zavolat)
+	if(curenv->env_pgfault_upcall != NULL) {
+		// ked existuje upcall mam dve ulohy:
+		// vlozit na zasobnik pre obsluhu vynimky v uzivatelskom priestore "page fault stack frame" co neviem, co je ale myslim, ze ide o UTrapFrame strukturu
+		// spustit obsluhu
+
+		// krok 0 zistim, ci existuje stranka pre exception stakc (prostredie si ju podla vsetkych textov ma vytvarat samo)
+		user_mem_assert(curenv, (void*)(UXSTACKTOP-PGSIZE), PGSIZE, PTE_W | PTE_U | PTE_P); // pravdepodobne sa niektore prava kontroluju implicitne, all po zbehlej obhliadke kodu si nie som isty (takto to bude fungovat)
+
+		// krok 1 zistime si stack pointer
+		char* usp = (char*)(tf->tf_esp); // char je 1B a funkcia sizeof vracia velkost v bytoch takze koli smernikovej aritmetike si to chcem ulahcit
+	
+		// nachadzam sa uz na user exception stacku?
+		if((uintptr_t)usp < UXSTACKTOP && (uintptr_t)usp > USTACKTOP) {
+			// pretiekol mi zasobnik? ak ako mam znicit prostredie
+			if((uintptr_t)usp < UXSTACKTOP-PGSIZE) {
+				cprintf("Pretiekol user exception stack!\n");
+				print_trapframe(tf);
+				env_destroy(curenv);
+			}
+
+			// vnorene volanie mam vynechat jedno slovo (32b) miesta na zasobniku (netusim, ci tam treba nieco zapisat, asi hej ale neviem si spomenut, ze co)
+			usp -= 4; // 4*8b = 32b
+		}
+		else {
+			// nenachadzam sa na user exception stacku => treba tam zacat
+			usp = (char*)UXSTACKTOP;
+		}
+
+		// krok 2 mame pointer na user exception stacku mozeme tam ulozit strukturu UTrapframe
+		usp -= sizeof(struct UTrapframe);
+		((struct UTrapframe*)usp)->utf_fault_va = fault_va;
+		((struct UTrapframe*)usp)->utf_err = tf->tf_err;
+		((struct UTrapframe*)usp)->utf_regs = tf->tf_regs;
+		((struct UTrapframe*)usp)->utf_eip = tf->tf_eip;
+		((struct UTrapframe*)usp)->utf_eflags = tf->tf_eflags;
+		((struct UTrapframe*)usp)->utf_esp = tf->tf_esp;
+
+		// krok 3 spustit samotnu obsluhu prerusenia v uzivatelskom priestore
+		curenv->env_tf.tf_esp = (uintptr_t)usp; // nastavim zasobnik
+		curenv->env_tf.tf_eip = (uintptr_t)curenv->env_pgfault_upcall; // nastavim IP
+
+		env_run(curenv);
+	}
+
 	// Destroy the environment that caused the fault.
 	cprintf("[%08x] user fault va %08x ip %08x\n",
 		curenv->env_id, fault_va, tf->tf_eip);

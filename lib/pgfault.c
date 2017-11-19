@@ -29,7 +29,20 @@ set_pgfault_handler(void (*handler)(struct UTrapframe *utf))
 	if (_pgfault_handler == 0) {
 		// First time through!
 		// LAB 4: Your code here.
-		panic("set_pgfault_handler not implemented");
+
+		// krok 1 vytvorit user exception zasobnik
+		r = sys_page_alloc(sys_getenvid(), (void*)(UXSTACKTOP-PGSIZE), PTE_U | PTE_P | PTE_W);
+		if(r < 0) {
+			cprintf("Chyba pri mapovani user exception stacku; %e\n", r);
+			panic("Chyba pri nastavovani page fault handlera pre environment"); // panic?
+		}
+
+		// krok 2 nastavenie pointera na funkciu vykonavajucu obsluhu prerusenia
+		r = sys_env_set_pgfault_upcall(sys_getenvid(), _pgfault_upcall);
+		if(r < 0) {
+			cprintf("Chyba pri nastavovani handlera; %e\n", r);
+			panic("Chyba pri nastavovani page fault handlera pre environment");
+		}
 	}
 
 	// Save handler pointer for assembly to call.
