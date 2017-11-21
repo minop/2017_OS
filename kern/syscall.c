@@ -91,7 +91,6 @@ sys_exofork(void)
 	struct Env *newEnv;
 	int ret;
 
-	cprintf("hello wrold\n");
 	ret = env_alloc(&newEnv, curenv->env_id);
 	if(ret < 0) return ret;
 
@@ -257,7 +256,7 @@ sys_page_map(envid_t srcenvid, void *srcva,
 	r = envid2env(dstenvid, &envDest, 1);
 	if(r < 0) return r;
 	
-	// krok 2 overit adresi	
+	// krok 2 overit adresi
 	if( (uintptr_t)srcva >= UTOP || ((uintptr_t)srcva%PGSIZE != 0) ) return -E_INVAL;
 	if( (uintptr_t)dstva >= UTOP || ((uintptr_t)dstva%PGSIZE != 0) ) return -E_INVAL;
 
@@ -267,7 +266,7 @@ sys_page_map(envid_t srcenvid, void *srcva,
 	if(stranka == NULL) return -E_INVAL; // nie je nic namapovane
 
 	// krok 4 overit prava
-	if( (perm & ~PTE_SYSCALL) != 0) return -E_INVAL; // su natsavene aj ine bity	
+	if( (perm & ~PTE_SYSCALL) != 0) return -E_INVAL; // su natsavene aj ine bity
 	if( (perm & (PTE_U | PTE_P)) != (PTE_U | PTE_P) ) return -E_INVAL; // PTE_U a PTE_P nie su oba nastavene
 	if( (*ptentry & PTE_W) == 0 ) {
 		// stranka nema povolene zapisovanie
@@ -277,7 +276,6 @@ sys_page_map(envid_t srcenvid, void *srcva,
 	// krok 5 namapovat stranku do dest
 	r = page_insert(envDest->env_pgdir, stranka, dstva, perm);
 	if(r < 0) return r;
-
 	return 0;
 }
 

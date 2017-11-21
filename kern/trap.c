@@ -362,8 +362,7 @@ page_fault_handler(struct Trapframe *tf)
 		// ked existuje upcall mam dve ulohy:
 		// vlozit na zasobnik pre obsluhu vynimky v uzivatelskom priestore "page fault stack frame" co neviem, co je ale myslim, ze ide o UTrapFrame strukturu
 		// spustit obsluhu
-
-		// krok 0 zistim, ci existuje stranka pre exception stakc (prostredie si ju podla vsetkych textov ma vytvarat samo)
+		// krok 0 zistim, ci existuje stranka pre exception stack (prostredie si ju podla vsetkych textov ma vytvarat samo)
 		user_mem_assert(curenv, (void*)(UXSTACKTOP-PGSIZE), PGSIZE, PTE_W | PTE_U | PTE_P); // pravdepodobne sa niektore prava kontroluju implicitne, all po zbehlej obhliadke kodu si nie som isty (takto to bude fungovat)
 
 		// krok 1 zistime si stack pointer
@@ -371,7 +370,7 @@ page_fault_handler(struct Trapframe *tf)
 	
 		// nachadzam sa uz na user exception stacku?
 		if((uintptr_t)usp < UXSTACKTOP && (uintptr_t)usp > USTACKTOP) {
-			// pretiekol mi zasobnik? ak ako mam znicit prostredie
+			// pretiekol mi zasobnik? ak ano mam znicit prostredie
 			if((uintptr_t)usp < UXSTACKTOP-PGSIZE) {
 				cprintf("Pretiekol user exception stack!\n");
 				print_trapframe(tf);
