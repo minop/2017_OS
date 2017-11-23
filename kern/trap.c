@@ -91,7 +91,24 @@ trap_init(void)
 	extern void TH_ALIGN(); 	SETGATE(idt[T_ALIGN], 0, GD_KT, TH_ALIGN, 0); 
 	extern void TH_MCHK(); 		SETGATE(idt[T_MCHK], 0, GD_KT, TH_MCHK, 0); 
 	extern void TH_SIMDERR(); 	SETGATE(idt[T_SIMDERR], 0, GD_KT, TH_SIMDERR, 0); 
-	extern void TH_SYSCALL(); 	SETGATE(idt[T_SYSCALL], 1, GD_KT, TH_SYSCALL, 3); 
+	extern void TH_SYSCALL(); 	SETGATE(idt[T_SYSCALL], 0, GD_KT, TH_SYSCALL, 3);
+	extern void TH_IRQ_TIMER();	SETGATE(idt[IRQ_OFFSET+IRQ_TIMER], 0, GD_KT, TH_IRQ_TIMER, 0);
+	extern void TH_IRQ_KBD();	SETGATE(idt[IRQ_OFFSET+IRQ_KBD], 0, GD_KT, TH_IRQ_KBD, 0);
+	extern void TH_IRQ_2();		SETGATE(idt[IRQ_OFFSET+2], 0, GD_KT, TH_IRQ_2, 0);
+	extern void TH_IRQ_3();		SETGATE(idt[IRQ_OFFSET+3], 0, GD_KT, TH_IRQ_3, 0);
+	extern void TH_IRQ_SERIAL();	SETGATE(idt[IRQ_OFFSET+IRQ_SERIAL], 0, GD_KT, TH_IRQ_SERIAL, 0);
+	extern void TH_IRQ_5();		SETGATE(idt[IRQ_OFFSET+5], 0, GD_KT, TH_IRQ_5, 0);
+	extern void TH_IRQ_6();		SETGATE(idt[IRQ_OFFSET+6], 0, GD_KT, TH_IRQ_6, 0);
+	extern void TH_IRQ_SPURIOUS();	SETGATE(idt[IRQ_OFFSET+IRQ_SPURIOUS], 0, GD_KT, TH_IRQ_SPURIOUS, 0);
+	extern void TH_IRQ_8();		SETGATE(idt[IRQ_OFFSET+8], 0, GD_KT, TH_IRQ_8, 0);
+	extern void TH_IRQ_9();		SETGATE(idt[IRQ_OFFSET+9], 0, GD_KT, TH_IRQ_9, 0);
+	extern void TH_IRQ_10();	SETGATE(idt[IRQ_OFFSET+10], 0, GD_KT, TH_IRQ_10, 0);
+	extern void TH_IRQ_11();	SETGATE(idt[IRQ_OFFSET+11], 0, GD_KT, TH_IRQ_11, 0);
+	extern void TH_IRQ_12();	SETGATE(idt[IRQ_OFFSET+12], 0, GD_KT, TH_IRQ_12, 0);
+	extern void TH_IRQ_13();	SETGATE(idt[IRQ_OFFSET+13], 0, GD_KT, TH_IRQ_13, 0);
+	extern void TH_IRQ_IDE();	SETGATE(idt[IRQ_OFFSET+IRQ_IDE], 0, GD_KT, TH_IRQ_IDE, 0);
+	extern void TH_IRQ_15();	SETGATE(idt[IRQ_OFFSET+15], 0, GD_KT, TH_IRQ_15, 0);
+	extern void TH_IRQ_ERROR();	SETGATE(idt[IRQ_OFFSET+IRQ_ERROR], 0, GD_KT, TH_IRQ_ERROR, 0);
 
 	// Per-CPU setup 
 	trap_init_percpu();
@@ -142,6 +159,7 @@ trap_init_percpu(void)
 
 	// Load the IDT
 	lidt(&idt_pd);
+	//DT (Load IDT register) loads the IDT register with the linear base address and limit values contained in the memory operand. This instruction can be executed only when the CPL is zero. It is normally used by the initialization logic of an operating system when creating an IDT. An operating system may also use it to change from one IDT to another.
 }
 
 void
@@ -232,6 +250,11 @@ trap_dispatch(struct Trapframe *tf)
 	// Handle clock interrupts. Don't forget to acknowledge the
 	// interrupt using lapic_eoi() before calling the scheduler!
 	// LAB 4: Your code here.
+
+	if(tf->tf_trapno == IRQ_OFFSET + IRQ_TIMER) {
+		lapic_eoi(); // podla instrukcii v komentary
+		sched_yield();
+	}
 
 	// Unexpected trap: The user process or the kernel has a bug.
 	print_trapframe(tf);
