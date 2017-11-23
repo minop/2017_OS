@@ -196,7 +196,7 @@ env_setup_vm(struct Env *e)
 	// ikremenetvoanie poctu referencii na 'p' (env_pgdir)
 	p->pp_ref++;
 
-	memcpy( (uintptr_t*)page2kva(p)+PDX(UTOP), kern_pgdir+PDX(UTOP), PGSIZE-PDX(UTOP));
+	memcpy( (pde_t*)page2kva(p)+PDX(UTOP), kern_pgdir+PDX(UTOP), (NPDENTRIES-PDX(UTOP))*sizeof(pde_t));
 	// dest: adresa kde zacina UTOP v stranke 'p'
 	// src: adresa kde zacina UTOP v stranke 'kern_pgdir'
 	// velkost: velkost stranky - pocet bytov, ktore som preskocil indexom (miesto od indexu do konca)
