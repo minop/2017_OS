@@ -30,31 +30,22 @@ sched_yield(void)
 
 	// LAB 4: Your code here.
 
-	static int last_index = NENV-1; // najprv budem pricitovat a teda zacnem na zaciatku pola
-	int end_index = last_index;
-	
-	do {
-		// posunutie sa na dalsi prvok pola
-		++last_index;
-		last_index = last_index % NENV;
+	int index = 0;
+	if (curenv)
+		index = (ENVX(curenv->env_id)+1) % NENV;
 
+	for (int i = 0; i < NENV; i++) {	
 		// je prostredie RUNNABLE?
-		if(envs[last_index].env_status == ENV_RUNNABLE) {
+		if(envs[index].env_status == ENV_RUNNABLE) {
 			// spustim toto prostredie
-			env_run(&envs[last_index]);
+			env_run(&envs[index]);
 		}
-		else if(envs[last_index].env_status == ENV_RUNNING) {
-			// pokial nie je RUNNABLE, ale nahodou bezi pozriem, ci nebezi na mojom procesore
-			if(cpunum() == envs[last_index].env_cpunum) {
-				idle = &envs[last_index];
-			}	
-		}
-	} while(last_index != end_index);
+		index = (index+1) % NENV;
+	}
 
 	// presiel som vsetky prostredia a nenasiel som ziadne runnable, ak to co bezi na tejto cpu stale moze bezat spustim to
-	if(idle != NULL) {
-		env_run(idle);
-	}
+	if(curenv && (curenv->env_status == ENV_RUNNING))
+		env_run(curenv);
 	// inac skoncim
 
 	// sched_halt never returns

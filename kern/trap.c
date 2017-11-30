@@ -386,20 +386,12 @@ page_fault_handler(struct Trapframe *tf)
 		// vlozit na zasobnik pre obsluhu vynimky v uzivatelskom priestore "page fault stack frame" co neviem, co je ale myslim, ze ide o UTrapFrame strukturu
 		// spustit obsluhu
 		// krok 0 zistim, ci existuje stranka pre exception stack (prostredie si ju podla vsetkych textov ma vytvarat samo)
-		user_mem_assert(curenv, (void*)(UXSTACKTOP-PGSIZE), PGSIZE, PTE_W | PTE_U | PTE_P); // pravdepodobne sa niektore prava kontroluju implicitne, all po zbehlej obhliadke kodu si nie som isty (takto to bude fungovat)
 
 		// krok 1 zistime si stack pointer
 		char* usp = (char*)(tf->tf_esp); // char je 1B a funkcia sizeof vracia velkost v bytoch takze koli smernikovej aritmetike si to chcem ulahcit
 	
 		// nachadzam sa uz na user exception stacku?
-		if((uintptr_t)usp < UXSTACKTOP && (uintptr_t)usp > USTACKTOP) {
-			// pretiekol mi zasobnik? ak ano mam znicit prostredie
-			if((uintptr_t)usp < UXSTACKTOP-PGSIZE) {
-				cprintf("Pretiekol user exception stack!\n");
-				print_trapframe(tf);
-				env_destroy(curenv);
-			}
-
+		if((uintptr_t)usp > USTACKTOP) {
 			// vnorene volanie mam vynechat jedno slovo (32b) miesta na zasobniku (netusim, ci tam treba nieco zapisat, asi hej ale neviem si spomenut, ze co)
 			usp -= 4; // 4*8b = 32b
 		}
@@ -410,6 +402,7 @@ page_fault_handler(struct Trapframe *tf)
 
 		// krok 2 mame pointer na user exception stacku mozeme tam ulozit strukturu UTrapframe
 		usp -= sizeof(struct UTrapframe);
+		user_mem_assert(curenv, (void*)(usp), sizeof(struct UTrapframe), PTE_W | PTE_U | PTE_P); // pravdepodobne sa niektore prava kontroluju implicitne, all po zbehlej obhliadke kodu si nie som isty (takto to bude fungovat)
 		((struct UTrapframe*)usp)->utf_fault_va = fault_va;
 		((struct UTrapframe*)usp)->utf_err = tf->tf_err;
 		((struct UTrapframe*)usp)->utf_regs = tf->tf_regs;
