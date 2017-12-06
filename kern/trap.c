@@ -72,6 +72,43 @@ trap_init(void)
 	extern struct Segdesc gdt[];
 
 	// LAB 3: Your code here.
+	
+	extern void TH_DIVIDE(); 	SETGATE(idt[T_DIVIDE], 0, GD_KT, TH_DIVIDE, 0); 
+	extern void TH_DEBUG(); 	SETGATE(idt[T_DEBUG], 0, GD_KT, TH_DEBUG, 0); 
+	extern void TH_NMI(); 		SETGATE(idt[T_NMI], 0, GD_KT, TH_NMI, 0); 
+	extern void TH_BRKPT(); 	SETGATE(idt[T_BRKPT], 0, GD_KT, TH_BRKPT, 3); 
+	extern void TH_OFLOW(); 	SETGATE(idt[T_OFLOW], 0, GD_KT, TH_OFLOW, 0); 
+	extern void TH_BOUND(); 	SETGATE(idt[T_BOUND], 0, GD_KT, TH_BOUND, 0); 
+	extern void TH_ILLOP(); 	SETGATE(idt[T_ILLOP], 0, GD_KT, TH_ILLOP, 0); 
+	extern void TH_DEVICE(); 	SETGATE(idt[T_DEVICE], 0, GD_KT, TH_DEVICE, 0); 
+	extern void TH_DBLFLT(); 	SETGATE(idt[T_DBLFLT], 0, GD_KT, TH_DBLFLT, 0); 
+	extern void TH_TSS(); 		SETGATE(idt[T_TSS], 0, GD_KT, TH_TSS, 0); 
+	extern void TH_SEGNP(); 	SETGATE(idt[T_SEGNP], 0, GD_KT, TH_SEGNP, 0); 
+	extern void TH_STACK(); 	SETGATE(idt[T_STACK], 0, GD_KT, TH_STACK, 0); 
+	extern void TH_GPFLT(); 	SETGATE(idt[T_GPFLT], 0, GD_KT, TH_GPFLT, 0); 
+	extern void TH_PGFLT(); 	SETGATE(idt[T_PGFLT], 0, GD_KT, TH_PGFLT, 0); 
+	extern void TH_FPERR(); 	SETGATE(idt[T_FPERR], 0, GD_KT, TH_FPERR, 0); 
+	extern void TH_ALIGN(); 	SETGATE(idt[T_ALIGN], 0, GD_KT, TH_ALIGN, 0); 
+	extern void TH_MCHK(); 		SETGATE(idt[T_MCHK], 0, GD_KT, TH_MCHK, 0); 
+	extern void TH_SIMDERR(); 	SETGATE(idt[T_SIMDERR], 0, GD_KT, TH_SIMDERR, 0); 
+	extern void TH_SYSCALL(); 	SETGATE(idt[T_SYSCALL], 0, GD_KT, TH_SYSCALL, 3);
+	extern void TH_IRQ_TIMER();	SETGATE(idt[IRQ_OFFSET+IRQ_TIMER], 0, GD_KT, TH_IRQ_TIMER, 0);
+	extern void TH_IRQ_KBD();	SETGATE(idt[IRQ_OFFSET+IRQ_KBD], 0, GD_KT, TH_IRQ_KBD, 0);
+	extern void TH_IRQ_2();		SETGATE(idt[IRQ_OFFSET+2], 0, GD_KT, TH_IRQ_2, 0);
+	extern void TH_IRQ_3();		SETGATE(idt[IRQ_OFFSET+3], 0, GD_KT, TH_IRQ_3, 0);
+	extern void TH_IRQ_SERIAL();	SETGATE(idt[IRQ_OFFSET+IRQ_SERIAL], 0, GD_KT, TH_IRQ_SERIAL, 0);
+	extern void TH_IRQ_5();		SETGATE(idt[IRQ_OFFSET+5], 0, GD_KT, TH_IRQ_5, 0);
+	extern void TH_IRQ_6();		SETGATE(idt[IRQ_OFFSET+6], 0, GD_KT, TH_IRQ_6, 0);
+	extern void TH_IRQ_SPURIOUS();	SETGATE(idt[IRQ_OFFSET+IRQ_SPURIOUS], 0, GD_KT, TH_IRQ_SPURIOUS, 0);
+	extern void TH_IRQ_8();		SETGATE(idt[IRQ_OFFSET+8], 0, GD_KT, TH_IRQ_8, 0);
+	extern void TH_IRQ_9();		SETGATE(idt[IRQ_OFFSET+9], 0, GD_KT, TH_IRQ_9, 0);
+	extern void TH_IRQ_10();	SETGATE(idt[IRQ_OFFSET+10], 0, GD_KT, TH_IRQ_10, 0);
+	extern void TH_IRQ_11();	SETGATE(idt[IRQ_OFFSET+11], 0, GD_KT, TH_IRQ_11, 0);
+	extern void TH_IRQ_12();	SETGATE(idt[IRQ_OFFSET+12], 0, GD_KT, TH_IRQ_12, 0);
+	extern void TH_IRQ_13();	SETGATE(idt[IRQ_OFFSET+13], 0, GD_KT, TH_IRQ_13, 0);
+	extern void TH_IRQ_IDE();	SETGATE(idt[IRQ_OFFSET+IRQ_IDE], 0, GD_KT, TH_IRQ_IDE, 0);
+	extern void TH_IRQ_15();	SETGATE(idt[IRQ_OFFSET+15], 0, GD_KT, TH_IRQ_15, 0);
+	extern void TH_IRQ_ERROR();	SETGATE(idt[IRQ_OFFSET+IRQ_ERROR], 0, GD_KT, TH_IRQ_ERROR, 0);
 
 	// Per-CPU setup 
 	trap_init_percpu();
@@ -108,21 +145,21 @@ trap_init_percpu(void)
 
 	// Setup a TSS so that we get the right stack
 	// when we trap to the kernel.
-	ts.ts_esp0 = KSTACKTOP;
-	ts.ts_ss0 = GD_KD;
-	ts.ts_iomb = sizeof(struct Taskstate);
+	thiscpu->cpu_ts.ts_esp0 = KSTACKTOP - cpunum()*(KSTKSIZE + KSTKGAP); // ts.ts_esp0 = KSTACKTOP;
+	thiscpu->cpu_ts.ts_ss0 = GD_KD; // ts.ts_ss0 = GD_KD;
+	thiscpu->cpu_ts.ts_iomb = sizeof(struct Taskstate); // podla konzultacii s cviciacimi (iomb sa podla intel manualu nachadza na konci Taskstate segmentu)
 
 	// Initialize the TSS slot of the gdt.
-	gdt[GD_TSS0 >> 3] = SEG16(STS_T32A, (uint32_t) (&ts),
-					sizeof(struct Taskstate) - 1, 0);
-	gdt[GD_TSS0 >> 3].sd_s = 0;
+	gdt[(GD_TSS0 >> 3) + cpunum()] = SEG16(STS_T32A, (uint32_t) &(thiscpu->cpu_ts), sizeof(struct Taskstate) - 1, 0);
+	gdt[(GD_TSS0 >> 3) + cpunum()].sd_s = 0; // mozno tu treba zmenit hodnoty pre rozne cpu?
 
 	// Load the TSS selector (like other segment selectors, the
 	// bottom three bits are special; we leave them 0)
-	ltr(GD_TSS0);
+	ltr(GD_TSS0 + 8*cpunum());
 
 	// Load the IDT
 	lidt(&idt_pd);
+	//DT (Load IDT register) loads the IDT register with the linear base address and limit values contained in the memory operand. This instruction can be executed only when the CPL is zero. It is normally used by the initialization logic of an operating system when creating an IDT. An operating system may also use it to change from one IDT to another.
 }
 
 void
@@ -176,6 +213,30 @@ trap_dispatch(struct Trapframe *tf)
 {
 	// Handle processor exceptions.
 	// LAB 3: Your code here.
+	int32_t navratovaH;	
+
+	// podla cisla vynimky presmerujem jej spracovanie (inc/trap.h)
+	// ked sa spracuje volanie myslim si, ze by som mal ukoncit funkciu, za switchom je totiz osetrenie nespracovaneho volania kam sa program aj po spravnom spracovani vzdy dostane... (ak je to zle tak sa to snad prejavi v buducnosti)
+	switch(tf->tf_trapno) {
+		case T_PGFLT: // page fault
+			page_fault_handler(tf);
+			return;
+
+		case T_BRKPT: // breakpoint
+			monitor(tf); // spustim monitor
+			return;
+
+		case T_SYSCALL: // systemove volanie
+			navratovaH = syscall(	tf->tf_regs.reg_eax, /* v registri eax je cislo sys volania */\
+						tf->tf_regs.reg_edx, \
+						tf->tf_regs.reg_ecx, \
+						tf->tf_regs.reg_ebx, \
+						tf->tf_regs.reg_edi, \
+						tf->tf_regs.reg_esi);
+			// nahrat navratovu hodnotu do registra eax
+			tf->tf_regs.reg_eax = navratovaH;		
+			return;
+	}
 
 	// Handle spurious interrupts
 	// The hardware sometimes raises these because of noise on the
@@ -190,8 +251,14 @@ trap_dispatch(struct Trapframe *tf)
 	// interrupt using lapic_eoi() before calling the scheduler!
 	// LAB 4: Your code here.
 
+	if(tf->tf_trapno == IRQ_OFFSET + IRQ_TIMER) {
+		lapic_eoi(); // podla instrukcii v komentary
+		sched_yield();
+	}
+
 	// Handle keyboard and serial interrupts.
 	// LAB 5: Your code here.
+
 
 	// Unexpected trap: The user process or the kernel has a bug.
 	print_trapframe(tf);
@@ -229,6 +296,8 @@ trap(struct Trapframe *tf)
 		// Acquire the big kernel lock before doing any
 		// serious kernel work.
 		// LAB 4: Your code here.
+		lock_kernel();
+
 		assert(curenv);
 
 		// Garbage collect if current enviroment is a zombie
@@ -274,6 +343,11 @@ page_fault_handler(struct Trapframe *tf)
 	// Handle kernel-mode page faults.
 
 	// LAB 3: Your code here.
+	
+	if((tf->tf_cs & 0x3) == 0) {
+		// spodne dva bity 'code segment' registra su nulove => nachadzam sa v jadre
+		panic("Page fault in kernel accesing va %08x\n", fault_va);
+	}
 
 	// We've already handled kernel-mode exceptions, so if we get here,
 	// the page fault happened in user mode.
@@ -308,6 +382,44 @@ page_fault_handler(struct Trapframe *tf)
 	//   (the 'tf' variable points at 'curenv->env_tf').
 
 	// LAB 4: Your code here.
+
+	// page fault v user mode
+	// existuje page fault upcall? (ak nie nebudem ho moct zavolat)
+	if(curenv->env_pgfault_upcall != NULL) {
+		// ked existuje upcall mam dve ulohy:
+		// vlozit na zasobnik pre obsluhu vynimky v uzivatelskom priestore "page fault stack frame" co neviem, co je ale myslim, ze ide o UTrapFrame strukturu
+		// spustit obsluhu
+		// krok 0 zistim, ci existuje stranka pre exception stack (prostredie si ju podla vsetkych textov ma vytvarat samo)
+
+		// krok 1 zistime si stack pointer
+		char* usp = (char*)(tf->tf_esp); // char je 1B a funkcia sizeof vracia velkost v bytoch takze koli smernikovej aritmetike si to chcem ulahcit
+	
+		// nachadzam sa uz na user exception stacku?
+		if((uintptr_t)usp > USTACKTOP) {
+			// vnorene volanie mam vynechat jedno slovo (32b) miesta na zasobniku (netusim, ci tam treba nieco zapisat, asi hej ale neviem si spomenut, ze co)
+			usp -= 4; // 4*8b = 32b
+		}
+		else {
+			// nenachadzam sa na user exception stacku => treba tam zacat
+			usp = (char*)UXSTACKTOP;
+		}
+
+		// krok 2 mame pointer na user exception stacku mozeme tam ulozit strukturu UTrapframe
+		usp -= sizeof(struct UTrapframe);
+		user_mem_assert(curenv, (void*)(usp), sizeof(struct UTrapframe), PTE_W | PTE_U | PTE_P); // pravdepodobne sa niektore prava kontroluju implicitne, all po zbehlej obhliadke kodu si nie som isty (takto to bude fungovat)
+		((struct UTrapframe*)usp)->utf_fault_va = fault_va;
+		((struct UTrapframe*)usp)->utf_err = tf->tf_err;
+		((struct UTrapframe*)usp)->utf_regs = tf->tf_regs;
+		((struct UTrapframe*)usp)->utf_eip = tf->tf_eip;
+		((struct UTrapframe*)usp)->utf_eflags = tf->tf_eflags;
+		((struct UTrapframe*)usp)->utf_esp = tf->tf_esp;
+
+		// krok 3 spustit samotnu obsluhu prerusenia v uzivatelskom priestore
+		curenv->env_tf.tf_esp = (uintptr_t)usp; // nastavim zasobnik
+		curenv->env_tf.tf_eip = (uintptr_t)curenv->env_pgfault_upcall; // nastavim IP
+
+		env_run(curenv);
+	}
 
 	// Destroy the environment that caused the fault.
 	cprintf("[%08x] user fault va %08x ip %08x\n",

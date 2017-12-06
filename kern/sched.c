@@ -11,7 +11,7 @@ void sched_halt(void);
 void
 sched_yield(void)
 {
-	struct Env *idle;
+	struct Env *idle = NULL;
 
 	// Implement simple round-robin scheduling.
 	//
@@ -29,6 +29,24 @@ sched_yield(void)
 	// below to halt the cpu.
 
 	// LAB 4: Your code here.
+
+	int index = 0;
+	if (curenv)
+		index = (ENVX(curenv->env_id)+1) % NENV;
+
+	for (int i = 0; i < NENV; i++) {	
+		// je prostredie RUNNABLE?
+		if(envs[index].env_status == ENV_RUNNABLE) {
+			// spustim toto prostredie
+			env_run(&envs[index]);
+		}
+		index = (index+1) % NENV;
+	}
+
+	// presiel som vsetky prostredia a nenasiel som ziadne runnable, ak to co bezi na tejto cpu stale moze bezat spustim to
+	if(curenv && (curenv->env_status == ENV_RUNNING))
+		env_run(curenv);
+	// inac skoncim
 
 	// sched_halt never returns
 	sched_halt();
@@ -75,7 +93,7 @@ sched_halt(void)
 		"pushl $0\n"
 		"pushl $0\n"
 		// Uncomment the following line after completing exercise 13
-		//"sti\n"
+		"sti\n"
 		"1:\n"
 		"hlt\n"
 		"jmp 1b\n"

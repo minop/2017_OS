@@ -120,6 +120,16 @@ env_init(void)
 	// Set up envs array
 	// LAB 3: Your code here.
 
+	int i; // 'envs' je NENVS a chcem ich indexovat odzadu pola (-1)
+
+	for(i = NENV - 1; i >= 0; i--) {
+		envs[i].env_id = 0; // nastavim na 0 podla zadania
+		
+		// pridat na zaciatok zretazeneho zoznamu
+		envs[i].env_link = env_free_list;
+		env_free_list = envs+i; // &envs[i]
+	}	
+
 	// Per-CPU part of the initialization
 	env_init_percpu();
 }
@@ -182,6 +192,17 @@ env_setup_vm(struct Env *e)
 	//    - The functions in kern/pmap.h are handy.
 
 	// LAB 3: Your code here.
+
+	// ikremenetvoanie poctu referencii na 'p' (env_pgdir)
+	p->pp_ref++;
+
+	memcpy( (pde_t*)page2kva(p)+PDX(UTOP), kern_pgdir+PDX(UTOP), (NPDENTRIES-PDX(UTOP))*sizeof(pde_t));
+	// dest: adresa kde zacina UTOP v stranke 'p'
+	// src: adresa kde zacina UTOP v stranke 'kern_pgdir'
+	// velkost: velkost stranky - pocet bytov, ktore som preskocil indexom (miesto od indexu do konca)
+
+	// nastavenie e->pgdir na 'p'
+	e->env_pgdir = page2kva(p); // 'p' je pointer takze je virtualna adresa a ta tam ma byt ulozena
 
 	// UVPT maps the env's own page table read-only.
 	// Permissions: kernel R, user R
@@ -248,6 +269,8 @@ env_alloc(struct Env **newenv_store, envid_t parent_id)
 	// Enable interrupts while in user mode.
 	// LAB 4: Your code here.
 
+	e->env_tf.tf_eflags = e->env_tf.tf_eflags | FL_IF;
+
 	// Clear the page fault handler until user installs one.
 	e->env_pgfault_upcall = 0;
 
@@ -279,6 +302,27 @@ region_alloc(struct Env *e, void *va, size_t len)
 	//   'va' and 'len' values that are not page-aligned.
 	//   You should round va down, and round (va + len) up.
 	//   (Watch out for corner-cases!)
+
+	// Nenapadaju mi ziadne corner-cases D: taaakze uvidme co sa stane
+	int i;
+	
+	// vypocitam hranice - potrebny pocet stranok
+	void *zaciatocnaVa = ROUNDDOWN(va, PGSIZE);
+	int pocetStranok = (ROUNDUP(va+len, PGSIZE) - zaciatocnaVa)/PGSIZE;
+	
+	for(i = 0; i < pocetStranok; i++) {
+		struct PageInfo *novaStranka = page_alloc( ~ALLOC_ZERO); // nemam nulovat mapovane stranky a nieco tam napisat musim, toto je safe, ze urcite nevynuluje
+
+		if(novaStranka == NULL) {
+			panic("kern/env.c region_alloc: nepodarilo sa alokovat novu stranku\n");
+		}
+
+		// namapujem novu stranku do pamate (inkrementaciu poctu referencii zabezpecuje funkcia)
+		if(page_insert(e->env_pgdir, novaStranka, zaciatocnaVa+i*PGSIZE, PTE_U | PTE_W ) != 0 ) {
+			// funkcia skoncila neuspesne
+			panic("kern/env.c region_alloc: funkcia page_insert skoncila neuspesne\n");
+		}
+	}	
 }
 
 //
@@ -336,10 +380,80 @@ load_icode(struct Env *e, uint8_t *binary)
 
 	// LAB 3: Your code here.
 
+	// vsetky hinty hovoria, ze najjednoduhzsie riesenie je zmenit PD na PD prostredia => zmenit adresu PD v registri cr3, aby som vedel tento krok aj zvratit (teraz viem, ze tam je kernelovsky pgdir ale bude tam zaruzene vzdy?) si musim najprv ulozit obsah tohoto registra, aby som ho potom mohol obnovit
+	uint32_t obsahCR3 = rcr3(); // inc/x86.h
+	lcr3(PADDR(e->env_pgdir));
+
+	// v instrukciach ku cviceniu je napisane, ze to moze byt chyba ak nevynutime zmenu registra cr3 (ako? - musim prinutit MMU pouzit jej novy adresar - existuje funkcia, ktora invaliduje zaznam v TLB (translation lookaside buffer))
+	// po dlhzsej uvahe som zvolil nasledujuci postup: zistim s ktorymi adresami musim pracovat a pred tym ako s nimi pracovat zacnem ich zrusim z buffera potom teda urcite nebudu v nom a preklad by sa mal robit spravne
+	
+	// krok 1: binarka by mala byt ELF subor - je?
+	struct Elf *elfBinarka = (struct Elf*) binary;
+
+	if(elfBinarka->e_magic != ELF_MAGIC) {
+		panic("kern/env.c load_icode: binarka nie je ELF subor\n");
+	}
+
+	// krok 2: binarka je ELF subor, mozem sa pokusit ziskat jeho header (podla bootmain)
+	struct Proghdr *ph, *eph;
+	ph = (struct Proghdr*)(binary + elfBinarka->e_phoff); // v 'ph' by mal byt program header
+
+	eph = ph + elfBinarka->e_phnum; // "posledna adresa kde je este hlavicka" (na tejto UZ hlavicka nie je)
+
+	// krok 3: podla predlohy v bootmain nacitat do pamate potrebne data
+	for(;ph < eph; ph++) {
+		// data mam nacitavat LEN ak sa jedna o konkretny druh hlavicky
+		if(ph->p_type != ELF_PROG_LOAD) continue;		
+
+		// potrebujem si namapovat dostatok pamate pre ulozenie segmentu
+		// predtym ale neviem ci je 'p_va' platna (zmenil som PD) musim ju pre istotu odstranit z buffera
+		tlb_invalidate(e->env_pgdir, (void*)ph->p_va);	
+		region_alloc(e, (void*)ph->p_va, ph->p_memsz);
+
+		// namapoval som dostatok pamate -> invalidujem vsetky adresy, ktore som namapoval (asi prehanam)
+		int i;
+		for(i = 0; ROUNDDOWN(ph->p_va, PGSIZE)+i*PGSIZE < ROUNDUP(ph->p_va + ph->p_memsz, PGSIZE); i++) {
+			tlb_invalidate(e->env_pgdir, (void*)(ROUNDDOWN(ph->p_va, PGSIZE)+i*PGSIZE) );
+		}
+
+		// nakopirujem tam udaje pomocou memcpy
+		memcpy((void*)ph->p_va, binary+ph->p_offset, ph->p_filesz);
+
+		// zvysok vynulujem
+		memset((void*)ph->p_va + ph->p_filesz, 0, ph->p_memsz - ph->p_filesz);
+	}
+	
+	// krok 4: spravne nastavit vstupny bod do nahraneho programu
+	e->env_tf.tf_eip = elfBinarka->e_entry;
+
+
+
 	// Now map one page for the program's initial stack
 	// at virtual address USTACKTOP - PGSIZE.
 
 	// LAB 3: Your code here.
+	struct PageInfo *strankaZasobniku = page_alloc(ALLOC_ZERO);
+
+	if(strankaZasobniku == NULL) {
+		panic("kern/env.c load_icode: nepodarilo sa alokovat stranku pre zasobnik prostredia\n");
+	}
+	strankaZasobniku->pp_ref++;
+
+	// pre istotu invalidovat miesta kam chcem zapisovat a kde bude umiestneny zasobnik
+	tlb_invalidate(e->env_pgdir, (void*)(USTACKTOP) );
+	tlb_invalidate(e->env_pgdir, (void*)(USTACKTOP - PGSIZE) );
+
+	// namapujem stranku
+	if(page_insert(e->env_pgdir, strankaZasobniku, (void*)(USTACKTOP - PGSIZE), PTE_U | PTE_W) != 0 ) {
+		panic("kern/env.c load_icode: nepodarilo sa namapovat stranku pre zasobnik prosredia\n");
+	}
+
+	// nastavim esp pre prostredie
+	e->env_tf.tf_esp = USTACKTOP;
+
+
+	// obnovit cr3
+	lcr3(obsahCR3);
 }
 
 //
@@ -353,6 +467,20 @@ void
 env_create(uint8_t *binary, enum EnvType type)
 {
 	// LAB 3: Your code here.
+
+	struct Env *prostredie;
+	
+	// alokujem
+	int chyba = env_alloc(&prostredie, 0);
+	if(chyba < 0) {
+		panic("kern/env.c env_create: pri alokovani noveho prostredia nastala chyba %e\n", chyba);
+	}
+
+	// nahram kod
+	load_icode(prostredie, binary);
+
+	// nastavim typ
+	prostredie->env_type = type;
 
 	// If this is the file server (type == ENV_TYPE_FS) give it I/O privileges.
 	// LAB 5: Your code here.
@@ -487,6 +615,29 @@ env_run(struct Env *e)
 
 	// LAB 3: Your code here.
 
-	panic("env_run not yet implemented");
+	// 1.1 zistime, ci sa jedna o 'context switch'
+	if(curenv != NULL) {
+		if(curenv->env_status == ENV_RUNNING) {
+			curenv->env_status = ENV_RUNNABLE;
+		}	
+	}
+
+	// 1.2
+	curenv = e;
+	
+	// 1.3
+	curenv->env_status = ENV_RUNNING;
+
+	// 1.4
+	curenv->env_runs++;
+	
+	// 1.5
+	lcr3(PADDR(curenv->env_pgdir));
+
+	// (lab4) "tesne pred prepnutim sa do uzivatelskeho priestoru" musim uvolnit zamok jadra
+	unlock_kernel();
+
+	// 2.
+	env_pop_tf(&(curenv->env_tf));
 }
 
