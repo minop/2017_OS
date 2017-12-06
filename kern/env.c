@@ -484,6 +484,11 @@ env_create(uint8_t *binary, enum EnvType type)
 
 	// If this is the file server (type == ENV_TYPE_FS) give it I/O privileges.
 	// LAB 5: Your code here.
+	if(type == ENV_TYPE_FS) {
+		// mit instrukcie mi nie su uplne jasne, treba nastavit nejake biti v EFLAGS registry procesora, a maju to byt asi IOPL bity
+		// kluck k bitom(?) je v inc/mmu.h
+		prostredie->env_tf.tf_eflags = prostredie->env_tf.tf_eflags | FL_IOPL_3;
+	}
 }
 
 //
