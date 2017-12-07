@@ -62,7 +62,21 @@ alloc_block(void)
 	// super->s_nblocks blocks in the disk altogether.
 
 	// LAB 5: Your code here.
-	panic("alloc_block not implemented");
+	// prejdeme postupne bloky a overime, ci su volne, ked najdeme volny alokujeme si ho
+	int i;
+	// 0ty blok by nikdy aj tak nemal byt free.... 
+	for(i = 1; i < super->s_nblocks; i++) {
+		// prechadzam vsetky bloky (a akurat mi napadlo, ze nemusim pozerat bity sam)
+		if(block_is_free(i)) {
+			// oznacim blok ako obsadeny
+			bitmap[i/32] &= ~(1<<(i%32)); // vyraz je 1 na spravnom mieste, negaciou tam dostanem 0 na spravnom mieste a teda zmazem bit na tomto mieste
+			// "okamzite flush"
+			flush_block(bitmap+i/32); // flushuje blok obsahujuci VA (mam mierne zly pocit, ze to je hack)
+			// vrat cislo bloku (i)
+			return i;
+		}
+	}
+	// nic som nenasiel
 	return -E_NO_DISK;
 }
 
@@ -134,8 +148,32 @@ fs_init(void)
 static int
 file_block_walk(struct File *f, uint32_t filebno, uint32_t **ppdiskbno, bool alloc)
 {
-       // LAB 5: Your code here.
-       panic("file_block_walk not implemented");
+	// LAB 5: Your code here.
+	// overime hranice
+	if(filebno >= NDIRECT + NINDIRECT) return -E_INVAL;
+
+	// pozrieme direct blocky
+	if(filebno < NDIRECT) {
+		*ppdiskbno = &f->f_direct[filebno];
+		return 0;
+	}
+
+	// mam indirect bloky?
+	if(!f->f_indirect) {
+		// smiem alokovat?
+		if(!alloc) return -E_NOT_FOUND;
+	
+		// alokujem
+		int novyBlok;
+		if((novyBlok = alloc_block()) < 0) return -E_NO_DISK;
+		memset(diskaddr(novyBlok), '\0', BLKSIZE); // vynulujem
+		f->f_indirect=novyBlok;
+	}
+
+	// nahram indirect blok do pamate
+	filebno -= NDIRECT; // v nepriamom bloku su cislovane od 0, hoci ich poradove cisla su vissie
+	*ppdiskbno = &((uint32_t*)diskaddr(f->f_indirect))[filebno];
+	return 0;
 }
 
 // Set *blk to the address in memory where the filebno'th
@@ -149,8 +187,24 @@ file_block_walk(struct File *f, uint32_t filebno, uint32_t **ppdiskbno, bool all
 int
 file_get_block(struct File *f, uint32_t filebno, char **blk)
 {
-       // LAB 5: Your code here.
-       panic("file_get_block not implemented");
+	// LAB 5: Your code here.
+	uint32_t* smernikNaBlok;
+	int r, cisloBloku;
+	r = file_block_walk(f, filebno, &smernikNaBlok, 1);
+	if(r < 0) return r;
+
+	// ukazujem na nejaky blok?
+	if(*smernikNaBlok == 0) {
+		// blok zatial neexistuje => musim ho alokovat
+		cisloBloku = alloc_block();
+		if(cisloBloku < 0) return -E_NO_DISK;
+		*smernikNaBlok = cisloBloku;
+		*blk = (char*)diskaddr(*smernikNaBlok);
+		return 0;
+	}
+
+	*blk = (char*)diskaddr(*smernikNaBlok);
+	return 0;
 }
 
 // Try to find a file named "name" in dir.  If so, set *file to it.
