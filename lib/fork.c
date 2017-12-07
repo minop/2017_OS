@@ -84,10 +84,13 @@ duppage(envid_t envid, unsigned pn)
 	// LAB 4: Your code here.
 	int perm = uvpt[PGNUM(pn*PGSIZE)] & PTE_SYSCALL; // len bity povolene pre systemove volania
 	
-	if( (perm & (PTE_W | PTE_COW)) != 0) {
-		// je nastaveny aspon jeden z priznakov _W _COW (a oni sa vylucuju)
-		perm = (perm & ~PTE_W) | PTE_COW; // zmazem _W a pridam COW
-		cow = 1;
+	// pokial nemam stranku zdielat pozriem COW
+	if((perm & PTE_SHARE) == 0) {
+		if( (perm & (PTE_W | PTE_COW)) != 0) {
+			// je nastaveny aspon jeden z priznakov _W _COW (a oni sa vylucuju)
+			perm = (perm & ~PTE_W) | PTE_COW; // zmazem _W a pridam COW
+			cow = 1;
+		}
 	}
 
 	// namapujeme stranku pre 'envid' prostredie

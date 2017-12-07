@@ -302,6 +302,24 @@ static int
 copy_shared_pages(envid_t child)
 {
 	// LAB 5: Your code here.
+	// ~kopia z lib/fork.c
+	int stranka;
+
+	for(stranka = PGNUM(UTEXT); stranka < PGNUM(USTACKTOP); stranka++) {
+		// pritomnost v tabulke stranok	
+		if((uvpd[PDX(stranka*PGSIZE)] & (PTE_P|PTE_U)) == (PTE_P|PTE_U)) {
+			// je stranka pritomna, ma ku nej uzivatel pristup a ma sa zdielat?
+			if((uvpt[PGNUM(stranka*PGSIZE)] & (PTE_P|PTE_U|PTE_SHARE)) == (PTE_P|PTE_U|PTE_SHARE)) {
+				// musim skopirovat stranku
+				// ~light kopia duppage z lib/fork.c
+				int perm = uvpt[PGNUM(stranka*PGSIZE)] & PTE_SYSCALL;
+				
+				// namapujem
+				int r = sys_page_map(0, (void*)(stranka*PGSIZE), child, (void*)(stranka*PGSIZE), perm);
+				if(r < 0) return r;
+			}
+		}
+	}
 	return 0;
 }
 
