@@ -199,8 +199,6 @@ file_get_block(struct File *f, uint32_t filebno, char **blk)
 		cisloBloku = alloc_block();
 		if(cisloBloku < 0) return -E_NO_DISK;
 		*smernikNaBlok = cisloBloku;
-		*blk = (char*)diskaddr(*smernikNaBlok);
-		return 0;
 	}
 
 	*blk = (char*)diskaddr(*smernikNaBlok);
