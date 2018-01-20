@@ -55,7 +55,17 @@ again:
 			// then close the original 'fd'.
 
 			// LAB 5: Your code here.
-			panic("< redirection not implemented");
+			// ~kopia kodu pre '>' (presmerovanie vystupu)
+			if((fd = open(t, O_RDONLY)) < 0) {
+				// nastala chyba => vypisem
+				cprintf("open %s for read: %e", t, fd);
+				exit();
+			}
+			if (fd != 0) {
+				// chceli sme 't' otvorit ako file descriptor 0, ale nepodarilo sa => skopirujeme ho nan
+				dup(fd, 0);
+				close(fd);
+			}
 			break;
 
 		case '>':	// Output redirection
