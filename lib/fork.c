@@ -128,7 +128,6 @@ fork(void)
 {
 	// LAB 4: Your code here.
 	int r;
-//cprintf("0x%08x\n", &thisenv);
 	// krok 1 nastav page fault handler
 	set_pgfault_handler(pgfault);  // 'lib/pgfault.c' stara sa aj o vytvorenie zasobnika
 
@@ -147,7 +146,6 @@ fork(void)
 	// krok 3 chceme skopirovat nase mapovanie do dietata
 	int stranka;
 	// potrebujem skopirovat od UTEXT po USTACKTOP (normalny zasobnik sa ma kopriovat)
-	//cprintf("%04x\n", thisenv->env_id);
 	for(stranka = PGNUM(UTEXT); stranka < PGNUM(USTACKTOP); stranka++) { // duppage robi s scislom stranky
 		if( (uvpd[PDX(stranka*PGSIZE)] & (PTE_P | PTE_U)) != (PTE_P | PTE_U))
 			continue; // stranka, ktora nie je namapovana je uspesne skopirovana
