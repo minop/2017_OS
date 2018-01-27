@@ -6,4 +6,6 @@
 
 #include <inc/swap.h>
 
+extern struct Mapping *swap_pages;
+
 #endif /* !JOS_KERN_SWAP_H */

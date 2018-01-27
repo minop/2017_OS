@@ -10,6 +10,7 @@
 #include <kern/kclock.h>
 #include <kern/env.h>
 #include <kern/cpu.h>
+#include <kern/swap.h>
 
 // These variables are set by i386_detect_memory()
 size_t npages;			// Amount of physical memory (in pages)
@@ -182,6 +183,12 @@ mem_init(void)
 	// LAB 3: Your code here.
 
 	envs = boot_alloc(NENV * sizeof(struct Env));
+
+	//////////////////////////////////////////////////////////////////////
+
+	//nech 'swap_pages' ukazuje na pole velkosti 'MAXSWAPPEDPAGES' typu 'struct Mapping'
+
+	swap_pages = boot_alloc(MAXSWAPPEDPAGES * sizeof(struct Mapping));
 
 	//////////////////////////////////////////////////////////////////////
 	// Now that we've allocated the initial kernel data structures, we set
