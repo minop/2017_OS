@@ -1,6 +1,7 @@
 #include <inc/mmu.h>
 #include <inc/x86.h>
 #include <inc/assert.h>
+#include <inc/swap.h>
 
 #include <kern/pmap.h>
 #include <kern/trap.h>
@@ -13,6 +14,7 @@
 #include <kern/picirq.h>
 #include <kern/cpu.h>
 #include <kern/spinlock.h>
+#include <kern/swap.h>
 
 static struct Taskstate ts;
 
@@ -65,6 +67,8 @@ static const char *trapname(int trapno)
 	return "(unknown trap)";
 }
 
+// pocitadlo na spomalenie counteru
+static int pocitadlo = 0;
 
 void
 trap_init(void)
@@ -253,6 +257,16 @@ trap_dispatch(struct Trapframe *tf)
 
 	if(tf->tf_trapno == IRQ_OFFSET + IRQ_TIMER) {
 		lapic_eoi(); // podla instrukcii v komentary
+
+		// zmazem PTE_A bity na vsetkych strankach
+		++pocitadlo;
+		if(pocitadlo == MAXPERIODA) {
+			// velmy spinavy trik, mazanie PTE_A flagov trva dlho (asi az tak, ze znovu nastane prerusenie od casovaca) a preto ho vykonavam len kazdych MAXPERIODA (16) preruseni
+			clear_accessed_flags();
+			pocitadlo = 0;
+		}
+		
+		// preplanujem prostredia
 		sched_yield();
 	}
 

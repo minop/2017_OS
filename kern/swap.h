@@ -6,6 +6,11 @@
 
 #include <inc/swap.h>
 
+
 extern struct Mapping *swap_pages;
+
+
+// zmaze PTE_A vsetkym strankam v uzivatelskom priestore vo vsetkych prostrediach
+void clear_accessed_flags(void);
 
 #endif /* !JOS_KERN_SWAP_H */

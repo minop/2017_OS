@@ -23,6 +23,7 @@ KERN_SRCFILES :=	kern/entry.S \
 			kern/kclock.c \
 			kern/picirq.c \
 			kern/printf.c \
+			kern/swap.c \
 			kern/trap.c \
 			kern/trapentry.S \
 			kern/sched.c \
