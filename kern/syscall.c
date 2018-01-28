@@ -4,6 +4,7 @@
 #include <inc/error.h>
 #include <inc/string.h>
 #include <inc/assert.h>
+#include <inc/swap.h>
 
 #include <kern/env.h>
 #include <kern/pmap.h>
@@ -11,6 +12,7 @@
 #include <kern/syscall.h>
 #include <kern/console.h>
 #include <kern/sched.h>
+#include <kern/swap.h>
 
 // Print a string to the system console.
 // The string is exactly 'len' characters long.
@@ -483,6 +485,13 @@ syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, 
 	// lab5
 	case SYS_env_set_trapframe:
 		return sys_env_set_trapframe((envid_t)a1, (struct Trapframe*)a2);
+	// swap funkcie su v kern/swap.c
+	case SYS_swap_test:
+		swap_test((envid_t)a1);
+		return 0;
+	case SYS_swap_task_done:
+		swap_task_done((envid_t)a1);
+		return 0;
 	default:
 		return -E_INVAL;
 	}
