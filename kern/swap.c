@@ -16,8 +16,8 @@ struct Mapping *free_mappings = NULL;
 
 // pomocna struktura pri vyhadzovani stranky
 struct Kandidat {
-	PageInfo pi* = NULL;
-	int trieda = 4;
+	struct PageInfo *pi;
+	int trieda;
 };
 
 // spravne nastavy zretazeny zoznam volnych mapovacich struktur
@@ -92,19 +92,21 @@ void swap_evict_page() {
 	struct Kandidat kand;
 	bool najdene = false;
 
+	kand.trieda = 4;
+
 	for(i = 0; (i < NENV) || !najdene; ++i) {
 		aktualne = &envs[i]; // i-te prostredie
 		
 		// prezeram len obycajne prostredia (iba tam som mazal bity)
-		if(e->env_type == ENV_TYPE_USER) {
+		if(aktualne->env_type == ENV_TYPE_USER) {
 			// je prostredie RUNNING alebo RUNNABLE?
-			if(e->env_status == ENV_RUNNABLE || e->env_status == ENV_RUNNING) {
+			if(aktualne->env_status == ENV_RUNNABLE || aktualne->env_status == ENV_RUNNING) {
 			
 				// postupne vsetky stranky od UTEXT po UTOP
 				for(va = UTEXT; va < UTOP; va+=PGSIZE) {
 				
 					// ziskam si zaznam
-					pi = page_lookup(e->env_pgdir, (void*)va, &zaznam);
+					pi = page_lookup(aktualne->env_pgdir, (void*)va, &zaznam);
 
 					if(pi != NULL) {
 						// nachadza sa tu stranka => vyhodnotim jej vhodnost
@@ -147,15 +149,15 @@ void swap_evict_page() {
 		aktualne = &envs[i]; // i-te prostredie
 		
 		// prezeram len obycajne prostredia (iba tam som mazal bity)
-		if(e->env_type == ENV_TYPE_USER) {
+		if(aktualne->env_type == ENV_TYPE_USER) {
 			// je prostredie RUNNING alebo RUNNABLE?
-			if(e->env_status == ENV_RUNNABLE || e->env_status == ENV_RUNNING) {
+			if(aktualne->env_status == ENV_RUNNABLE || aktualne->env_status == ENV_RUNNING) {
 			
 				// postupne vsetky stranky od UTEXT po UTOP
 				for(va = UTEXT; va < UTOP; va+=PGSIZE) {
 				
 					// ziskam si zaznam
-					pi = page_lookup(e->env_pgdir, (void*)va, &zaznam);
+					pi = page_lookup(aktualne->env_pgdir, (void*)va, &zaznam);
 
 					// moja stranka?
 					if(pi == kand.pi) {
@@ -167,10 +169,10 @@ void swap_evict_page() {
 
 						// vyberiem si novy mapping zo zoznamu volnych
 						struct Mapping *novy = free_mappings;
-						free_mappings = gree_mappings->next;
+						free_mappings = free_mappings->next;
 
 						// nastavim mu hodnoty
-						novy->env_id = e->env_id;
+						novy->env_id = aktualne->env_id;
 						novy->va = va;
 
 						// pridam do zoznamu
@@ -275,7 +277,7 @@ void swap_page_to_disk(void* stranka, int pozicia, int32_t env_id, struct Mappin
 	struct Poziadavka *p = (struct Poziadavka*)page2kva(pi);
 	p->typ = SWAP_WRITE;
 	p->pozicia = pozicia;
-	p->adresa = stranka;
+	p->adresa = (uintptr_t)stranka;
 	p->env_id = env_id;
 	p->zaznamy = zaznamy;
 

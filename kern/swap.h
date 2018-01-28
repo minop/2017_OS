@@ -19,6 +19,9 @@ void swap_mappings_init(void);
 // zmaze PTE_A vsetkym strankam v uzivatelskom priestore vo vsetkych prostrediach
 void clear_accessed_flags(void);
 
+// najde najmenej pouzivanu stranku a vyhodi ju na disk
+void swap_evict_page(void);
+
 // funkcie na zapis/citanie stranok z disku
 void swap_page_to_disk(void* stranka, int pozicia, int32_t env_id, struct Mapping *zaznamy);
 void swap_page_from_disk(void* stranka, int pozicia, int32_t env_id);
