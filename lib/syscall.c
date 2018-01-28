@@ -117,3 +117,12 @@ sys_ipc_recv(void *dstva)
 	return syscall(SYS_ipc_recv, 1, (uint32_t)dstva, 0, 0, 0, 0);
 }
 
+void
+sys_swap_test(envid_t envid) {
+	syscall(SYS_swap_test, 1, (uint32_t)envid, 0, 0, 0, 0);
+}
+
+void
+sys_swap_task_done(envid_t envid) {
+	syscall(SYS_swap_task_done, 1, (uint32_t)envid, 0, 0, 0, 0);
+}

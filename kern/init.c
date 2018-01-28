@@ -58,6 +58,9 @@ i386_init(void)
 	// Start fs.
 	ENV_CREATE(fs_fs, ENV_TYPE_FS);
 
+	// Start kern-disk interface
+	ENV_CREATE(user_swapinterface, ENV_TYPE_SWAP);
+
 #if defined(TEST)
 	// Don't touch -- used by grading script!
 	ENV_CREATE(TEST, ENV_TYPE_USER);
