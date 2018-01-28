@@ -15,7 +15,7 @@ void clear_accessed_flags(void);
 
 // funkcie na zapis/citanie stranok z disku
 void swap_page_to_disk(void* stranka, int pozicia);
-void swap_page_from_dick(void* stranka, int pozicia);
+void swap_page_from_disk(void* stranka, int pozicia, int32_t env_id);
 
 // funkcie obsluhujuce systemove volania
 void swap_test(envid_t envid);

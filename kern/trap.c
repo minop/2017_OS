@@ -380,7 +380,7 @@ page_fault_handler(struct Trapframe *tf)
 		while(current != NULL){
 			if(curenv->env_id == current->env_id && fault_va == current->va){
 				//stranka je ulozena na disku. treba ju z neho nacitat.
-				
+				swap_page_from_disk((void*) fault_va, i, curenv->env_id);
 			}
 			current = current->next;
 		}
