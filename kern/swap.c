@@ -85,7 +85,7 @@ void swap_evict_page() {
 	// prejdem vsetky prostredia a pozriem bity
 	// kod na prechadzanie prostredi je podla toho na mazanie bitov
 	struct Env *aktualne;	// pointer na prve prostredie
-	int i;
+	int i, zi;
 	pte_t *zaznam;		// na kontrolu
 	uintptr_t va;		// virtualna adresa
 	struct PageInfo *pi;
@@ -129,15 +129,15 @@ void swap_evict_page() {
 	}
 
 	// pred tym,i nez najdem vsetky vyskyty stranky, si najdem volne miesto v strukture mapujucej stranky na disku na prostredia, a ak tam nie je skoncim
-	struct Mapping *zoznam = NULL;
-	for(i = 0; i < MAXSWAPPEDPAGES; i++) {
-		if(swap_pages[i] == NULL) {
+	struct Mapping **zoznam = NULL;
+	for(zi = 0; zi < MAXSWAPPEDPAGES; zi++) {
+		if(swap_pages[zi] == NULL) {
 			// volny zoznam
-			zoznam = swap_pages[i];
+			zoznam = &swap_pages[zi];
 			break;
 		}
 	}
-	if(i == MAXSWAPPEDPAGES)
+	if(zi == MAXSWAPPEDPAGES)
 		panic("swap_evict_page: nemam miesto na disku na vyhodenie dalsej stranky\n");
 
 	// v kand.pi je pointer na PageInfo najlepsej stranky
@@ -160,14 +160,32 @@ void swap_evict_page() {
 					// moja stranka?
 					if(pi == kand.pi) {
 						*zaznam |= PTE_SWAP; // stranka je na disku
-						// TODO pridat do struktury	
+						
+						// su volne mappingy?
+						if(free_mappings == NULL)
+							panic("swap_evict_page: nemam volny mapping na vyhodenie stranky\n");
+
+						// vyberiem si novy mapping zo zoznamu volnych
+						struct Mapping *novy = free_mappings;
+						free_mappings = gree_mappings->next;
+
+						// nastavim mu hodnoty
+						novy->env_id = e->env_id;
+						novy->va = va;
+
+						// pridam do zoznamu
+						novy->next = *zoznam;
+						*zoznam = novy;
 					}
 				}	
 			}
 		}
 	}
  
-	
+	// ak som sa dostal az sem bez paniky, tak vsetky prostredia, ktore sa na stranku odkazovali su v zozname, mozem dat stranku zapisat
+	swap_page_to_disk(page2kva(kand.pi), zi, curenv->env_id, *zoznam);
+	// sem sa dostanem iba, ak funkcia vratila - interface je v nejakom random stave
+	panic("swap_evict_page: kern-disk interface nie je v stave NOT RUNNABLE");
 }
 
 
@@ -184,6 +202,40 @@ struct Env* getInterfacePointer() {
 	return NULL;
 }
 
+// pomocna funkcia, ktora "jemne" odmapuje vsetky stranky zo zoznamu
+// ~kopia funkcie page_remove z kern/pmap.c
+void soft_page_remove_all(struct Mapping *zoznam) {
+	while(zoznam != NULL) {
+		struct Env *e;
+		pte_t *pte;
+		int r;
+		
+		// ziskam si prostredie
+		if((r = envid2env(zoznam->env_id, &e, 0)) == 0) {
+			// prostredie je legit
+			
+			// ziskam si zaznam
+			page_lookup(e->env_pgdir, (void*)zoznam->va, &pte);
+
+			if(pte != NULL) {
+				// naozaj tam je stranka
+				if(*pte & PTE_P) {
+					struct PageInfo *pi = pa2page(*pte);
+					
+					page_decref(pi);
+
+					// nastavim len PTE_P bit na 0, aby sa dala stranka obnovit s povodnymi pravami
+					*pte &= ~PTE_P;
+					
+					tlb_invalidate(e->env_pgdir, (void*)zoznam->va);
+				}
+			}
+		}
+
+		zoznam = zoznam->next;	
+	}
+}
+
 // funkcie zabezpecujuce zapisovanie a citanie stranok z/na disk
 
 // ulozi stranku zo vstupnej adresy na n-tu poziciu na disk
@@ -191,7 +243,7 @@ struct Env* getInterfacePointer() {
 // funkcia sa nevracia ked vykona poziadavku (lebo spusta prostredie)
 // po vykonani poziadavky sa pokracuje vo funkcii 'swap_task_done'
 // ked nastane chyba (napr. adresa nie je zarovnana na stranky) vola sa panic
-void swap_page_to_disk(void* stranka, int pozicia) {
+void swap_page_to_disk(void* stranka, int pozicia, int32_t env_id, struct Mapping *zaznamy) {
 	// overim adresu
 	if(((uintptr_t)stranka % PGSIZE) != 0)
 		panic("swap_page_to_disk: adresa nie je zarovnana na stranky");
@@ -223,6 +275,9 @@ void swap_page_to_disk(void* stranka, int pozicia) {
 	struct Poziadavka *p = (struct Poziadavka*)page2kva(pi);
 	p->typ = SWAP_WRITE;
 	p->pozicia = pozicia;
+	p->adresa = stranka;
+	p->env_id = env_id;
+	p->zaznamy = zaznamy;
 
 	// prostredie ma potrebne data AJ prikaz spustim ho (a pre istotu ho predtym nastavim na runnable)
 	e->env_status = ENV_RUNNABLE;
@@ -328,12 +383,17 @@ void swap_task_done(envid_t envid) {
 
 			// TODO dalsie spracovanie po nacitani
 			break;
-	}	
-	//ziskam prostredie ktoremu chybala stranka	
+		case SWAP_WRITE:
+			// obsah stranky som zapisal na disk, mozem uvolnit stranky
+			soft_page_remove_all(p->zaznamy);
+
+			// TODO dalsie spracovanie po zapisani
+			break;
+	}
+
+	// spustim prostredie z ktoreho som volal swapovacie funkcie	
 	if(envid2env(p->env_id, &e, 0) < 0)
-		return;
-	
-	e->env_status = ENV_RUNNABLE;
+		panic("swap_task_done: neviem sa vratit k povodnemu prostrediu\n");
 	
 	//prostredie znovu spustim
 	env_run(e);

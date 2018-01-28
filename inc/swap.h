@@ -41,8 +41,9 @@ enum {
 struct Poziadavka {
 	unsigned typ;
 	uint32_t pozicia;
-	pde_t *pgdir;		// len pre citanie
-	uintptr_t adresa;	// len pre citanie
+	pde_t *pgdir;			// len pre citanie
+	uintptr_t adresa;		// len pre citanie
 	uint32_t env_id;
+	struct Mapping *zaznamy;	// len pre zapis	
 };
 #endif /* !JOS_INC_SWAP_H */
