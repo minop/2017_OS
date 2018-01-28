@@ -184,7 +184,7 @@ void swap_page_to_disk(void* stranka, int pozicia) {
 // funkcia sa nevracia ked vykona poziadavku (lebo spusta prostredie)
 // po vykonani poziadavky sa pokracuje vo funkcii 'swap_task_done'
 // ked nastane chyba (napr. adresa nie je zarovnana na stranky) vola sa panic
-void swap_page_from_disk(void* stranka, int pozicia) {
+void swap_page_from_disk(void* stranka, int pozicia, int32_t env_id) {
 	// overim adresu
 	if(((uintptr_t)stranka % PGSIZE) != 0)
 		panic("swap_page_from_disk: adresa nie je zarovnana na stranky");
@@ -208,6 +208,7 @@ void swap_page_from_disk(void* stranka, int pozicia) {
 	p->pozicia = pozicia;
 	p->adresa = (uintptr_t)stranka;
 	p->pgdir = curenv->env_pgdir; // ked sa vynorim tak som v inom prostredi, potrebujem teda vediet kam mam nahrat data
+	p->env_id = env_id;
 
 	// prostredie ma potrebne data AJ prikaz spustim ho (a pre istotu ho predtym nastavim na runnable)
 	e->env_status = ENV_RUNNABLE;
@@ -278,4 +279,12 @@ void swap_task_done(envid_t envid) {
 			// TODO dalsie spracovanie po nacitani
 			break;
 	}	
+	//ziskam prostredie ktoremu chybala stranka	
+	if(envid2env(p->env_id, &e, 0) < 0)
+		return;
+	
+	e->env_status = ENV_RUNNABLE;
+	
+	//prostredie znovu spustim
+	env_run(e);
 }

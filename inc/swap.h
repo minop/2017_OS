@@ -18,9 +18,9 @@
 
 //struktura ktora bude udrziavat informacie o tom, ktore prostredie ma ktoru virtualnu adresu namapovanu na fyzicku stranku
 struct Mapping{
-	struct Env *env;	// prostredie, ktore ma namapovanu fyzicku stranku
-	uintptr_t va;		// virtualna adresa, na ktoru sa mapuje fyzicka stranka
-	struct Mapping *next;	// dalsie mapovanie na fyzicku stranku v zretazenom zozname
+	int32_t env_id;		//prostredie, ktore mapuje na fyzicku stranku
+	uintptr_t va;		//virtualna adresa, na ktoru sa mapuje fyzicka stranka
+	struct Mapping *next;	//dalsie mapovanie na fyzicku stranku v zretazenom zozname
 };
 
 // adresy stranok pre komunikaciu s rozhranim
@@ -40,5 +40,6 @@ struct Poziadavka {
 	uint32_t pozicia;
 	pde_t *pgdir;		// len pre citanie
 	uintptr_t adresa;	// len pre citanie
+	uint32_t env_id;
 };
 #endif /* !JOS_INC_SWAP_H */

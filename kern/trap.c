@@ -358,7 +358,8 @@ void
 page_fault_handler(struct Trapframe *tf)
 {
 	uint32_t fault_va;
-
+	int i;
+	struct Mapping *current;
 	// Read processor's CR2 register to find the faulting address
 	fault_va = rcr2();
 
@@ -369,6 +370,20 @@ page_fault_handler(struct Trapframe *tf)
 	if((tf->tf_cs & 0x3) == 0) {
 		// spodne dva bity 'code segment' registra su nulove => nachadzam sa v jadre
 		panic("Page fault in kernel accesing va %08x\n", fault_va);
+	}
+
+
+	//zistim, ze ci fault_va pre curenv je niekde v poli swap_pages.
+
+	for(i = 0; i < MAXSWAPPEDPAGES; i++){
+		current = &(swap_pages[i]);
+		while(current != NULL){
+			if(curenv->env_id == current->env_id && fault_va == current->va){
+				//stranka je ulozena na disku. treba ju z neho nacitat.
+				swap_page_from_disk((void*) fault_va, i, curenv->env_id);
+			}
+			current = current->next;
+		}
 	}
 
 	// We've already handled kernel-mode exceptions, so if we get here,
