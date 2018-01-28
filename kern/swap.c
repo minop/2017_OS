@@ -11,7 +11,11 @@
 //vytvaram pole struktur Mapping, pole zretazenych zoznamov predstavujucich mapovanie na fyzicku stranku. Kazdy prvok pola predstavuje fyzicku stranku. Pole ma teda velkost MAXSWAPPEDPAGES.
 struct Mapping *swap_pages = NULL;
 
-
+// pomocna struktura pri vyhadzovani stranky
+struct Kandidat {
+	PageInfo pi* = NULL;
+	int trieda = 4;
+};
 
 // zmaze PTE_A bit na vsetkych strankach [UTEXT,UTOP), aby sa dal pouzit NRU (Not Recently Used)
 // algoritmus na vyber stranky na swap
@@ -49,6 +53,73 @@ void clear_accessed_flags() {
 		
 	return;
 }
+
+// funkcia, ktora vyberie stranku na vyhodenie na disk a potom restartuje prostredie, ktore ju spustilo
+void swap_evict_page() {
+	// potrebujem najst kandidata na vyhodenie
+	// algoritmus je NRU - Not Recently Used (podla wikipedie)
+	// stranky su rozdelene do 4 kategorii podla stavov ich Accessed a Dirty bitov
+	// (podla wikipedie: Page_replacement_algorithm)
+	// 3. referenced, modified 		PTE_A + PTE_D
+	// 2. referenced, not modified		PTE_A   
+	// 1. not referenced, modified		        PTE_D
+	// 0. not referended, not modified
+	
+	// musim prejst postupne vsetky stranky vo vsetkych prostrediach a najst co najlepsieho kandidata (ked najdem 0 tak skoncim)
+	// nasledne musim najst vsetky prostredia, ktore k danej stranke pristupuju, pridat ich do struktury a oznacit stranky bitom PTE_SWAP
+	// potom musim obsah stranky zapisat na disk na prislusnej pozicii (podla struktury)
+	// nakoniec (uz v funkcii obsluhujucej systemove volanie) musim dotknutu stranku uvolnit a spustit prostredie, ktore zavolalo tuto funkciu
+
+	// prejdem vsetky prostredia a pozriem bity
+	// kod na prechadzanie prostredi je podla toho na mazanie bitov
+	struct Env *aktualne;	// pointer na prve prostredie
+	int i;
+	pte_t *zaznam;		// na kontrolu
+	uintptr_t va;		// virtualna adresa
+	struct PageInfo *pi;
+	struct Kandidat kand;
+	bool najdene = false;
+
+	for(i = 0; (i < NENV) || !najdene; ++i) {
+		aktualne = &envs[i]; // i-te prostredie
+		
+		// prezeram len obycajne prostredia (iba tam som mazal bity)
+		if(e->env_type == ENV_TYPE_USER) {
+			// je prostredie RUNNING alebo RUNNABLE?
+			if(e->env_status == ENV_RUNNABLE || e->env_status == ENV_RUNNING) {
+			
+				// postupne vsetky stranky od UTEXT po UTOP
+				for(va = UTEXT; va < UTOP; va+=PGSIZE) {
+				
+					// ziskam si zaznam
+					pi = page_lookup(e->env_pgdir, (void*)va, &zaznam);
+
+					if(pi != NULL) {
+						// nachadza sa tu stranka => vyhodnotim jej vhodnost
+						int trieda = ((*zaznam & PTE_A)/PTE_A)*2 + ((*zaznam & PTE_D)/PTE_D);
+						
+						// je to 0?
+						if(trieda == 0) {
+							// nasiel som svoju stranku
+							kand.pi = pi;
+							najdene = true; // na vyjdenie z vonkajsieho cyklu
+							break;
+						}
+						// je to menej ako aktualny kandidat?
+						else if(kand.trieda < trieda){
+							kand.trieda = trieda;
+							kand.pi = pi;
+						}
+					}
+				}	
+			}
+		}
+	}
+
+	// v kand.pi je pointer na PageInfo stranky, 
+	
+}
+
 
 // pomocna funkcia, na ziskanie Env pointra na komunikacne prostredie
 struct Env* getInterfacePointer() {

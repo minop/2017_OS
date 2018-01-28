@@ -35,7 +35,7 @@ enum {
 };
 
 // struktura na komunikaciu s pomocnym prostredim
-struct Poziadavka{
+struct Poziadavka {
 	unsigned typ;
 	uint32_t pozicia;
 	pde_t *pgdir;		// len pre citanie
