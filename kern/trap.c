@@ -376,7 +376,7 @@ page_fault_handler(struct Trapframe *tf)
 	//zistim, ze ci fault_va pre curenv je niekde v poli swap_pages.
 
 	for(i = 0; i < MAXSWAPPEDPAGES; i++){
-		current = &(swap_pages[i]);
+		current = swap_pages[i];
 		while(current != NULL){
 			if(curenv->env_id == current->env_id && fault_va == current->va){
 				//stranka je ulozena na disku. treba ju z neho nacitat.
