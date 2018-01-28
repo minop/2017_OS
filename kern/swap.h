@@ -8,7 +8,13 @@
 #include <inc/env.h>
 #include <inc/string.h>
 
-extern struct Mapping *swap_pages;
+extern struct Mapping **swap_pages;
+
+extern struct Mapping *free_mappings;
+extern struct Mapping *mappings;
+
+// nastavenie zretazeneho zoznamu mappingov
+void swap_mappings_init(void);
 
 // zmaze PTE_A vsetkym strankam v uzivatelskom priestore vo vsetkych prostrediach
 void clear_accessed_flags(void);

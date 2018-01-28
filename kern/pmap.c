@@ -186,9 +186,16 @@ mem_init(void)
 
 	//////////////////////////////////////////////////////////////////////
 
-	//nech 'swap_pages' ukazuje na pole velkosti 'MAXSWAPPEDPAGES' typu 'struct Mapping'
+	// nech 'swap_pages' ukazuje na pole velkosti 'MAXSWAPPEDPAGES' typu 'struct Mapping*'
 
-	swap_pages = boot_alloc(MAXSWAPPEDPAGES * sizeof(struct Mapping));
+	swap_pages = boot_alloc(MAXSWAPPEDPAGES * sizeof(struct Mapping*));
+
+	// a 'mappings' ukazuju na pole velkosti 'MAXMAPPINGS' typu 'struct Mapping'
+	mappings = boot_alloc(MAXMAPPINGS * sizeof(struct Mapping));
+
+	// to ze predbehneme stranky, by nemalo prilis vadit... pripravime si zretazeny zoznam volnych mapovani
+	// funkcia v kern/swap.c
+	swap_mappings_init();
 
 	//////////////////////////////////////////////////////////////////////
 	// Now that we've allocated the initial kernel data structures, we set

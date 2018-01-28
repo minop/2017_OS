@@ -9,13 +9,25 @@
 #include <kern/pmap.h>
 
 //vytvaram pole struktur Mapping, pole zretazenych zoznamov predstavujucich mapovanie na fyzicku stranku. Kazdy prvok pola predstavuje fyzicku stranku. Pole ma teda velkost MAXSWAPPEDPAGES.
-struct Mapping *swap_pages = NULL;
+struct Mapping **swap_pages = NULL;
+
+struct Mapping *mappings = NULL;
+struct Mapping *free_mappings = NULL;
 
 // pomocna struktura pri vyhadzovani stranky
 struct Kandidat {
 	PageInfo pi* = NULL;
 	int trieda = 4;
 };
+
+// spravne nastavy zretazeny zoznam volnych mapovacich struktur
+void swap_mappings_init() {
+	int i;
+	for(i = 0; i < MAXMAPPINGS; ++i) {
+		mappings[i].next = free_mappings;
+		free_mappings = &mappings[i];
+	}
+}
 
 // zmaze PTE_A bit na vsetkych strankach [UTEXT,UTOP), aby sa dal pouzit NRU (Not Recently Used)
 // algoritmus na vyber stranky na swap
