@@ -17,7 +17,7 @@
 
 //struktura ktora bude udrziavat informacie o tom, ktore prostredie ma ktoru virtualnu adresu namapovanu na fyzicku stranku
 struct Mapping{
-	struct Env *env;	//prostredie, ktore maju na fyzicku stranku
+	int32_t env_id;		//prostredie, ktore mapuje na fyzicku stranku
 	uintptr_t va;		//virtualna adresa, na ktoru sa mapuje fyzicka stranka
 	struct Mapping *next;	//dalsie mapovanie na fyzicku stranku v zretazenom zozname
 };

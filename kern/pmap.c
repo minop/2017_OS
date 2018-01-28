@@ -662,7 +662,8 @@ void
 page_remove(pde_t *pgdir, void *va)
 {
 	// Fill this function in
-
+	int i;
+	struct Mapping *current, *previous;
 	// je na 'va' namapovana nejaka stranka?
 	pte_t *pte;
 	page_lookup(pgdir, va, &pte);
@@ -689,7 +690,34 @@ page_remove(pde_t *pgdir, void *va)
 		return;
 	}
 	else {
+		//stranka moze byt odlozena na disku. treba zistit, ci je v zozname swap_pages a vyhodit ju, ak ano. Z disku ju podla mna mazat netreba, bude oznacena ako nepouzivana (casom)
+		
+		for(i = 0; i < MAXSWAPPEDPAGES; i++){
+			//prechadzam prvky Mappingu kym nenajdem aktualne prostredie
+			previous = NULL;
+			current = &swap_pages[i];
+			while(current != NULL){
+				if(current->env_id == curenv->env_id){
+					//ide o aktualne prostredie. ide ale aj o tuto va?
+					if(current->va == (uintptr_t)va)
+					{
+						//odstran z linked listu
+						//specialny pripad ak ide o prvu polozku
+						if(previous == NULL)
+							swap_pages[i] = *(current->next);
+						else{
+							previous->next = current->next;
+							//free(current);
+							return;
+						}
+					}
+				}
+			previous = current;
+			current = current->next;
+			}
+		}
 		// stranka nie je napamovana ==> silently does nothing
+		
 		return;
 	}
 }
