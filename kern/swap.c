@@ -116,7 +116,45 @@ void swap_evict_page() {
 		}
 	}
 
-	// v kand.pi je pointer na PageInfo stranky, 
+	// pred tym,i nez najdem vsetky vyskyty stranky, si najdem volne miesto v strukture mapujucej stranky na disku na prostredia, a ak tam nie je skoncim
+	struct Mapping *zoznam = NULL;
+	for(i = 0; i < MAXSWAPPEDPAGES; i++) {
+		if(swap_pages[i] == NULL) {
+			// volny zoznam
+			zoznam = swap_pages[i];
+			break;
+		}
+	}
+	if(i == MAXSWAPPEDPAGES)
+		panic("swap_evict_page: nemam miesto na disku na vyhodenie dalsej stranky\n");
+
+	// v kand.pi je pointer na PageInfo najlepsej stranky
+	// potrebujem prejst vsetky prostredia a vsetky stranky (znovu) a vsetky vyskyty pridat do struktury ak je este miesto
+	// (pomocne premenne na prechadzanie cyklom mozem zrecyklovat)
+	for(i = 0; i < NENV; ++i) {
+		aktualne = &envs[i]; // i-te prostredie
+		
+		// prezeram len obycajne prostredia (iba tam som mazal bity)
+		if(e->env_type == ENV_TYPE_USER) {
+			// je prostredie RUNNING alebo RUNNABLE?
+			if(e->env_status == ENV_RUNNABLE || e->env_status == ENV_RUNNING) {
+			
+				// postupne vsetky stranky od UTEXT po UTOP
+				for(va = UTEXT; va < UTOP; va+=PGSIZE) {
+				
+					// ziskam si zaznam
+					pi = page_lookup(e->env_pgdir, (void*)va, &zaznam);
+
+					// moja stranka?
+					if(pi == kand.pi) {
+						*zaznam |= PTE_SWAP; // stranka je na disku
+						// TODO pridat do struktury	
+					}
+				}	
+			}
+		}
+	}
+ 
 	
 }
 
