@@ -343,7 +343,6 @@ void swap_test(envid_t envid) {
 	e->env_status = ENV_NOT_RUNNABLE;
 
 	// TODO testy (patrilo, by sa)
-	cprintf("hello from syscall in kernel\n");
 
 	//nastavuje SWAP_INIT signalizujuc ze je mozne robit so swapovanim stranok na disk
 	SWAP_READY = 1;
