@@ -54,9 +54,9 @@ matchtest(test_testfile, "large file",
 @test(10, "spawn via spawnhello")
 def test_spawn():
     r.user_test("spawnhello")
-    r.match('i am parent environment 00001001',
+    r.match('i am parent environment 00001002',
             'hello, world',
-            'i am environment 00001002',
+            'i am environment 00001003',
             'No runnable environments in the system!')
 
 @test(5, "Protection I/O space")
