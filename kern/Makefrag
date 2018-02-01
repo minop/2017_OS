@@ -96,7 +96,8 @@ KERN_BINFILES +=	user/testpteshare \
 			user/testshell
 
 # Binary files for SWAP
-KERN_BINFILES +=	user/swapinterface
+KERN_BINFILES +=	user/swapinterface \
+			user/testswap
 
 KERN_OBJFILES := $(patsubst %.c, $(OBJDIR)/%.o, $(KERN_SRCFILES))
 KERN_OBJFILES := $(patsubst %.S, $(OBJDIR)/%.o, $(KERN_OBJFILES))
