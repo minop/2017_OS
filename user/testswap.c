@@ -3,13 +3,9 @@
 #include <inc/lib.h>
 
 #define ALLOC_PAGE_NUM 32300 // experimentalne urcene, ze je to viac ako volne stranky po spusteni JOSu
-
-void dirtybreakpoint() {
-	cprintf("dirty breakpoint\n");
-}
+#define RANDOM_TOP 0xe0000000 // nahodna adresa od ktorej nizsie mapujem stranky
 
 void umain(int argc, char **argv) {
-	dirtybreakpoint();
 	cprintf("Page swapping to disk test\nAllocation starts\n");
 
 	// uistime sa, ze kernel-disk interface bezi
@@ -23,12 +19,11 @@ void umain(int argc, char **argv) {
 	int i;
 	int* num;
 	for(i = 0; i < ALLOC_PAGE_NUM; ++i) {
-		cprintf("i = %d; va = %0x\n", i,(USTACKTOP-(i+1)*PGSIZE));
 		// alokujem stranku
-		sys_page_alloc(thisenv->env_id, (void*)(USTACKTOP-(i+1)*PGSIZE), PTE_P | PTE_U | PTE_W);
+		sys_page_alloc(thisenv->env_id, (void*)(RANDOM_TOP-i*PGSIZE), PTE_P | PTE_U | PTE_W);
 		
 		// ulozim do nej hodnotu
-		num = (int*) (USTACKTOP-(i+1)*PGSIZE);
+		num = (int*) (RANDOM_TOP-i*PGSIZE);
 		*num = i;
 
 		// kontrolne vypisy
@@ -47,7 +42,7 @@ void umain(int argc, char **argv) {
 	
 	for(i = 0; i < ALLOC_PAGE_NUM; ++i) {
 		// nacitam hodnotu a overim
-		num = (int*) (USTACKTOP-(i+1)*PGSIZE);
+		num = (int*) (RANDOM_TOP-i*PGSIZE);
 		if(*num != i) {
 			panic("page %d did not load properly\n",i);
 		}

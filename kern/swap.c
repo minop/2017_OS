@@ -97,6 +97,20 @@ void swap_evict_page() {
 	struct Kandidat kand;
 	bool najdene = false;
 
+
+	// pred tym, nez najdem vsetky vyskyty stranky, si najdem volne miesto v strukture mapujucej stranky na disku na prostredia, a ak tam nie je skoncim
+	struct Mapping **zoznam = NULL;
+	for(zi = 0; zi < MAXSWAPPEDPAGES; zi++) {
+		if(swap_pages[zi] == NULL) {
+			// volny zoznam
+			zoznam = &swap_pages[zi];
+			break;
+		}
+	}
+	if(zi == MAXSWAPPEDPAGES)
+		panic("swap_evict_page: nemam miesto na disku na vyhodenie dalsej stranky\n");
+
+	// prezriem vsetky stranky a najdem najvhodnejsieho kandidata
 	kand.trieda = 4;
 
 	for(i = 0; (i < NENV) || !najdene; ++i) {
@@ -125,7 +139,7 @@ void swap_evict_page() {
 							break;
 						}
 						// je to menej ako aktualny kandidat?
-						else if(kand.trieda < trieda){
+						else if(trieda < kand.trieda){
 							kand.trieda = trieda;
 							kand.pi = pi;
 						}
@@ -134,18 +148,6 @@ void swap_evict_page() {
 			}
 		}
 	}
-
-	// pred tym,i nez najdem vsetky vyskyty stranky, si najdem volne miesto v strukture mapujucej stranky na disku na prostredia, a ak tam nie je skoncim
-	struct Mapping **zoznam = NULL;
-	for(zi = 0; zi < MAXSWAPPEDPAGES; zi++) {
-		if(swap_pages[zi] == NULL) {
-			// volny zoznam
-			zoznam = &swap_pages[zi];
-			break;
-		}
-	}
-	if(zi == MAXSWAPPEDPAGES)
-		panic("swap_evict_page: nemam miesto na disku na vyhodenie dalsej stranky\n");
 
 	// v kand.pi je pointer na PageInfo najlepsej stranky
 	// potrebujem prejst vsetky prostredia a vsetky stranky (znovu) a vsetky vyskyty pridat do struktury ak je este miesto
