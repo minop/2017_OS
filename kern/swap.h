@@ -12,7 +12,8 @@ extern struct Mapping **swap_pages;
 
 extern struct Mapping *free_mappings;
 extern struct Mapping *mappings;
-
+//signalizuje pripravenost swapovania stranok na disk
+extern int SWAP_READY;
 // nastavenie zretazeneho zoznamu mappingov
 void swap_mappings_init(void);
 

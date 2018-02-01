@@ -13,6 +13,7 @@ struct Mapping **swap_pages = NULL;
 
 struct Mapping *mappings = NULL;
 struct Mapping *free_mappings = NULL;
+int SWAP_READY = 0;
 
 // pomocna struktura pri vyhadzovani stranky
 struct Kandidat {
@@ -339,6 +340,9 @@ void swap_test(envid_t envid) {
 
 	// TODO testy (patrilo, by sa)
 	cprintf("hello from syscall in kernel\n");
+
+	//nastavuje SWAP_INIT signalizujuc ze je mozne robit so swapovanim stranok na disk
+	SWAP_READY = 1;
 }
 
 void swap_task_done(envid_t envid) {
