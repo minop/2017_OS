@@ -33,6 +33,10 @@ void swap_mappings_init() {
 // zmaze PTE_A bit na vsetkych strankach [UTEXT,UTOP), aby sa dal pouzit NRU (Not Recently Used)
 // algoritmus na vyber stranky na swap
 void clear_accessed_flags() {
+	
+	if(!SWAP_READY)	//flagy sa clearuju kvoli swappovaniu. ak swappovanie nie je pripravene, netreba clearovat.
+		return;
+
 	// potrebujem prejst vsetky prostredia, ktore su RUNNING alebo RUNNABLE a zmazat im PTE_A flag na vsetkych strankach, ktore su medzi UTEXT a UTOP (swapovat na disk budem len tieto stranky)
 
 	struct Env *e; // pointer na prve prostredie
