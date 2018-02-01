@@ -416,23 +416,20 @@ page_alloc(int alloc_flags)
 {
 	// Fill this function in
 	//mozem uz swapovat na disk?
-	if(SWAP_READY) {
-		if(page_free_list == NULL) {
-			// nie je ziadna stranka volna => vrat NULL
-		
-			//ziadna stranka nie je volna, ale mozno bude mozne nepouzivanu stranku ulozit na disk
-			//a uvolnit miesto. Potom by toto prostredie malo byt restartnute
-			//a znovu zavolat page_alloc, pricom tentokrat uz bude dostupna volna stranka 
+	
+	if(page_free_list == NULL) {
+		// nie je ziadna stranka volna => vrat NULL
+	
+		//ziadna stranka nie je volna, ale mozno bude mozne nepouzivanu stranku ulozit na disk
+		//a uvolnit miesto. Potom by toto prostredie malo byt restartnute
+		//a znovu zavolat page_alloc, pricom tentokrat uz bude dostupna volna stranka 
+		//ak mozme swappovat, tak swapnime
+		if(SWAP_READY){
 			swap_evict_page();
-
-			//sem by sa teoreticky kod nemal nikdy dostat.
-			return NULL;
 		}
-	}
-	else
-	{
+		//sem by sa teoreticky kod nemal nikdy dostat.
 		return NULL;
-	}
+		}
 
 	// vyberieme stranku zo zoznamu volnych stranok
 	struct PageInfo *alokovanaStranka = page_free_list;
